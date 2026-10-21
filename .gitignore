@@ -1,0 +1,35 @@
+
+# Android Studio / Gradle
+.gradle/
+**/build/
+**/.cxx/
+local.properties
+.idea/
+*.iml
+*.apk
+*.aab
+captures/
+
+# Android signing credentials
+*.jks
+*.keystore
+key.properties
+
+# PHP backend secrets
+.env
+.env.*
+!.env.example
+secrets.php
+vendor/
+
+# ESP32 credentials
+secrets.h
+
+# Database backups (not schema files)
+backups/
+*.sql.gz
+*.sql.zip
+
+# Operating system files
+.DS_Store
+Thumbs.db
