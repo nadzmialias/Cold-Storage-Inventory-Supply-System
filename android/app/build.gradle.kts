@@ -1,7 +1,26 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
 }
+
+
+val localProperties = Properties().apply {
+    rootProject.file("local.properties")
+        .inputStream()
+        .use { load(it) }
+}
+
+val supabaseUrl =
+    localProperties.getProperty("SUPABASE_URL", "")
+
+val supabaseKey =
+    localProperties.getProperty(
+        "SUPABASE_PUBLISHABLE_KEY", ""
+    )
+
 
 android {
     namespace = "com.csiss.inventory"
@@ -17,6 +36,18 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField(
+            "String",
+            "https://zujynwdptdmnopfhbuxn.supabase.co",
+            "\"$supabaseUrl\""
+        )
+
+        buildConfigField(
+            "String",
+            "sb_publishable_f3FneO3mvz9VbDCqITeJNQ_BeWP7yvh",
+            "\"$supabaseKey\""
+        )
     }
 
     buildTypes {
@@ -32,6 +63,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -51,4 +83,7 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
+    implementation(platform(libs.supabase.bom))
+    implementation(libs.supabase.auth)
+    implementation(libs.supabase.postgrest)
 }
