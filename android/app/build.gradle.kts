@@ -39,15 +39,20 @@ android {
 
         buildConfigField(
             "String",
-            "https://zujynwdptdmnopfhbuxn.supabase.co",
+            "SUPABASE_URL",
             "\"$supabaseUrl\""
         )
 
         buildConfigField(
             "String",
-            "sb_publishable_f3FneO3mvz9VbDCqITeJNQ_BeWP7yvh",
+            "SUPABASE_PUBLISHABLE_KEY",
             "\"$supabaseKey\""
         )
+    }
+
+    buildFeatures {
+        compose = true
+        buildConfig = true
     }
 
     buildTypes {
@@ -60,10 +65,6 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
-    }
-    buildFeatures {
-        compose = true
-        buildConfig = true
     }
 }
 
@@ -86,4 +87,5 @@ dependencies {
     implementation(platform(libs.supabase.bom))
     implementation(libs.supabase.auth)
     implementation(libs.supabase.postgrest)
+    implementation(libs.ktor.client.okhttp)
 }
