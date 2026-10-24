@@ -47,6 +47,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.core.tween
+import androidx.activity.compose.BackHandler
 
 // CSISS color palette
 private val Navy = Color(0xFF132945)
@@ -73,6 +80,9 @@ fun TemperatureScreen(
     var refresh by remember { mutableIntStateOf(0) }
     var showAlertsPage by remember {
         mutableStateOf(false)
+    }
+    val demoAlertOverrides = remember {
+        mutableStateMapOf<Long, String>()
     }
     var currentTime by remember {
         mutableStateOf(Instant.now())
@@ -113,21 +123,35 @@ fun TemperatureScreen(
 
         try {
             snapshot = if (useDemoData) {
+
                 val demo = repository.loadDemo()
 
+                // Keep previously edited temperature limits
                 val savedMin = demoMinOverride
                 val savedMax = demoMaxOverride
 
-                if (savedMin != null && savedMax != null) {
-                    demo.copy(
-                        storage = demo.storage.copy(
-                            minTemperature = savedMin,
-                            maxTemperature = savedMax
+                val adjustedDemo =
+                    if (savedMin != null && savedMax != null) {
+                        demo.copy(
+                            storage = demo.storage.copy(
+                                minTemperature = savedMin,
+                                maxTemperature = savedMax
+                            )
                         )
-                    )
-                } else {
-                    demo
-                }
+                    } else {
+                        demo
+                    }
+
+                // Keep previously changed alert statuses
+                adjustedDemo.copy(
+                    alerts = adjustedDemo.alerts.map { alert ->
+                        alert.copy(
+                            status = demoAlertOverrides[alert.alertId]
+                                ?: alert.status
+                        )
+                    }
+                )
+
             } else {
                 repository.loadLive()
             }
@@ -140,320 +164,413 @@ fun TemperatureScreen(
         }
     }
 
-    if (showAlertsPage) {
-        TemperatureAlertsScreen(
-            alerts = snapshot?.alerts.orEmpty(),
-            isLoading = loading,
-            errorMessage = error,
-            onBack = {
-                showAlertsPage = false
-            },
-            onRefresh = {
-                refresh++
-            }
-        )
-
-        return
+    BackHandler(enabled = showAlertsPage) {
+        showAlertsPage = false
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Background)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+            .safeDrawingPadding()
     ) {
 
-        // Header
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Background)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
 
-            Column(
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "CSISS / MONITORING",
-                    color = TextMuted,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp
-                )
 
-                Text(
-                    text = "Cold Storage",
-                    color = TextDark,
-                    fontSize = 27.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "CSISS / MONITORING",
+                        color = TextMuted,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+
+                    Text(
+                        text = "Cold Storage",
+                        color = TextDark,
+                        fontSize = 27.sp,
+                        fontWeight = FontWeight.Bold
+                    )
 
 
+                }
+
+
+                Button(
+                    onClick = { refresh++ },
+                    enabled = !loading,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Navy,
+                        contentColor = Color.White
+                    ),
+                    contentPadding = PaddingValues(
+                        horizontal = 14.dp,
+                        vertical = 8.dp
+                    )
+                ) {
+                    Text("Refresh")
+                }
             }
-
-
-            OutlinedButton(
-                onClick = { refresh++ },
-                enabled = !loading,
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Navy,
-                    contentColor = Color.White
-                ),
-                contentPadding = PaddingValues(
-                    horizontal = 14.dp,
-                    vertical = 8.dp
-                )
-            ) {
-                Text("Refresh")
-            }
-        }
 
 
 // ========================================
 // SENSOR INDICATOR + ALERTS BUTTON
 // ========================================
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            SensorConnectionIndicator(
-                lastReadingAt = snapshot
-                    ?.logs
-                    ?.firstOrNull()
-                    ?.recordedAt,
-                currentTime = currentTime,
-                demoMode = useDemoData,
-                isLoading = loading
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            AlertsStatusButton(
-                alertCount = snapshot?.alerts?.size ?: 0,
-                onClick = { showAlertsPage = true }
-            )
-        }
-
-
-        if (loading) {
-            LinearProgressIndicator(
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        error?.let {
-            Text(
-                it,
-                color = AlertRed,
-                fontSize = 14.sp
-            )
-        }
-
-        snapshot?.let { data ->
-
-            // Main temperature display
-            TemperatureHero(data)
-
-            // Minimum and Maximum temperature cards
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                MetricCard(
-                    title = "MINIMUM",
-                    value = formatTemp(data.storage.minTemperature),
-                    symbol = "↓",
-                    modifier = Modifier.weight(1f)
+                SensorConnectionIndicator(
+                    lastReadingAt = snapshot
+                        ?.logs
+                        ?.firstOrNull()
+                        ?.recordedAt,
+                    currentTime = currentTime,
+                    demoMode = useDemoData,
+                    isLoading = loading
                 )
 
-                MetricCard(
-                    title = "MAXIMUM",
-                    value = formatTemp(data.storage.maxTemperature),
-                    symbol = "↑",
-                    modifier = Modifier.weight(1f)
-                )
-            }
+                Spacer(modifier = Modifier.height(12.dp))
 
-            // Edit Limits button below the cards
-            if (canEditLimits) {
-                OutlinedButton(
+                AlertsStatusButton(
+                    alertCount = snapshot?.alerts?.count { alert ->
+                        alert.status == "OPEN" ||
+                                alert.status == "ACKNOWLEDGED"
+                    } ?: 0,
+
                     onClick = {
-                        limitSaveError = null
-                        showLimitEditor = true
+                        showAlertsPage = true
                     },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Navy,
-                        contentColor = Color.White
-                    )
-                ) {
-                    Text("Edit Limits")
-                }
+                )
             }
 
-            // Temperature history
-            SectionHeading("Temperature Trend")
 
-            TemperatureChart(
-                logs = data.logs,
-                storage = data.storage
-            )
+            if (loading) {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
 
-            // Recent reading history
-            SectionHeading("Recent Readings")
+            error?.let {
+                Text(
+                    it,
+                    color = AlertRed,
+                    fontSize = 14.sp
+                )
+            }
 
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        Color.White,
-                        RoundedCornerShape(20.dp)
+            snapshot?.let { data ->
+
+                // Main temperature display
+                TemperatureHero(data)
+
+                // Minimum and Maximum temperature cards
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    MetricCard(
+                        title = "MINIMUM",
+                        value = formatTemp(data.storage.minTemperature),
+                        symbol = "↓",
+                        modifier = Modifier.weight(1f)
                     )
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                if (data.logs.isEmpty()) {
-                    Text(
-                        "No readings available.",
-                        color = TextMuted
+
+                    MetricCard(
+                        title = "MAXIMUM",
+                        value = formatTemp(data.storage.maxTemperature),
+                        symbol = "↑",
+                        modifier = Modifier.weight(1f)
                     )
                 }
 
-                data.logs.take(6).forEachIndexed { index, log ->
-                    Row(
+                // Edit Limits button below the cards
+                if (canEditLimits) {
+                    OutlinedButton(
+                        onClick = {
+                            limitSaveError = null
+                            showLimitEditor = true
+                        },
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement =
-                            Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Navy,
+                            contentColor = Color.White
+                        )
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement =
-                                Arrangement.spacedBy(12.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(10.dp)
-                                    .background(
-                                        if (log.isAbnormal)
-                                            AlertRed
-                                        else
-                                            NormalGreen,
-                                        CircleShape
-                                    )
-                            )
+                        Text("Edit Limits")
+                    }
+                }
 
-                            Column {
-                                Text(
-                                    formatTime(log.recordedAt),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = TextDark
+                // Temperature history
+                SectionHeading("Temperature Trend")
+
+                TemperatureChart(
+                    logs = data.logs,
+                    storage = data.storage
+                )
+
+                // Recent reading history
+                SectionHeading("Recent Readings")
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Color.White,
+                            RoundedCornerShape(20.dp)
+                        )
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (data.logs.isEmpty()) {
+                        Text(
+                            "No readings available.",
+                            color = TextMuted
+                        )
+                    }
+
+                    data.logs.take(6).forEachIndexed { index, log ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement =
+                                Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement =
+                                    Arrangement.spacedBy(12.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(10.dp)
+                                        .background(
+                                            if (log.isAbnormal)
+                                                AlertRed
+                                            else
+                                                NormalGreen,
+                                            CircleShape
+                                        )
                                 )
-                                Text(
-                                    if (log.isAbnormal)
-                                        "Abnormal"
-                                    else
-                                        "Normal",
-                                    fontSize = 11.sp,
-                                    color = TextMuted
-                                )
+
+                                Column {
+                                    Text(
+                                        formatTime(log.recordedAt),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = TextDark
+                                    )
+                                    Text(
+                                        if (log.isAbnormal)
+                                            "Abnormal"
+                                        else
+                                            "Normal",
+                                        fontSize = 11.sp,
+                                        color = TextMuted
+                                    )
+                                }
                             }
+
+                            Text(
+                                formatTemp(log.temperature),
+                                color = if (log.isAbnormal)
+                                    AlertRed else TextDark,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
 
-                        Text(
-                            formatTemp(log.temperature),
-                            color = if (log.isAbnormal)
-                                AlertRed else TextDark,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    if (index < minOf(6, data.logs.size) - 1) {
-                        HorizontalDivider(
-                            color = Color(0xFFF0F2F7)
-                        )
+                        if (index < minOf(6, data.logs.size) - 1) {
+                            HorizontalDivider(
+                                color = Color(0xFFF0F2F7)
+                            )
+                        }
                     }
                 }
+
+                Text(
+                    "CSISS · Cold Storage Inventory Supply System",
+                    modifier = Modifier.fillMaxWidth(),
+                    color = TextMuted,
+                    fontSize = 11.sp
+                )
             }
-
-            Text(
-                "CSISS · Cold Storage Inventory Supply System",
-                modifier = Modifier.fillMaxWidth(),
-                color = TextMuted,
-                fontSize = 11.sp
-            )
         }
-    }
 
-    if (showLimitEditor) {
-        snapshot?.let { data ->
+        if (showLimitEditor) {
+            snapshot?.let { data ->
 
-            EditTemperatureLimitsDialog(
-                currentMin = data.storage.minTemperature,
-                currentMax = data.storage.maxTemperature,
-                isSaving = savingLimits,
-                saveError = limitSaveError,
+                EditTemperatureLimitsDialog(
+                    currentMin = data.storage.minTemperature,
+                    currentMax = data.storage.maxTemperature,
+                    isSaving = savingLimits,
+                    saveError = limitSaveError,
 
-                onDismiss = {
-                    showLimitEditor = false
-                    limitSaveError = null
+                    onDismiss = {
+                        showLimitEditor = false
+                        limitSaveError = null
+                    },
+
+                    onSave = { newMin, newMax ->
+
+                        if (useDemoData) {
+
+                            // Save inside demo UI state
+                            demoMinOverride = newMin
+                            demoMaxOverride = newMax
+
+                            snapshot = snapshot?.copy(
+                                storage = data.storage.copy(
+                                    minTemperature = newMin,
+                                    maxTemperature = newMax
+                                )
+                            )
+
+                            showLimitEditor = false
+
+                        } else {
+
+                            scope.launch {
+                                savingLimits = true
+                                limitSaveError = null
+
+                                try {
+                                    val updatedStorage =
+                                        repository.updateLimits(
+                                            storageId = data.storage.storageId,
+                                            minimum = newMin,
+                                            maximum = newMax
+                                        )
+
+                                    snapshot = snapshot?.copy(
+                                        storage = updatedStorage
+                                    )
+
+                                    showLimitEditor = false
+
+                                } catch (e: Exception) {
+                                    limitSaveError =
+                                        "Unable to save limits. " +
+                                                "Check your Admin login and permissions."
+                                } finally {
+                                    savingLimits = false
+                                }
+                            }
+                        }
+                    }
+                )
+            }
+        }
+
+
+// ========================================
+// ANIMATED TEMPERATURE ALERTS PAGE
+// ========================================
+
+        AnimatedVisibility(
+            visible = showAlertsPage,
+
+            enter = slideInHorizontally(
+                initialOffsetX = { fullWidth ->
+                    fullWidth
+                },
+                animationSpec = tween(
+                    durationMillis = 350
+                )
+            ) + fadeIn(
+                animationSpec = tween(
+                    durationMillis = 300
+                )
+            ),
+
+            exit = slideOutHorizontally(
+                targetOffsetX = { fullWidth ->
+                    fullWidth
+                },
+                animationSpec = tween(
+                    durationMillis = 350
+                )
+            ) + fadeOut(
+                animationSpec = tween(
+                    durationMillis = 250
+                )
+            ),
+
+            modifier = Modifier.fillMaxSize()
+        ) {
+
+            TemperatureAlertsScreen(
+                alerts = snapshot?.alerts.orEmpty(),
+                isLoading = loading,
+                errorMessage = error,
+
+                onBack = {
+                    showAlertsPage = false
                 },
 
-                onSave = { newMin, newMax ->
+                onRefresh = {
+                    refresh++
+                },
+
+                // Changes are enabled in demo mode only
+                canChangeStatus = useDemoData,
+
+                onStatusChange = { alertId, newStatus ->
 
                     if (useDemoData) {
+                        snapshot?.let { current ->
 
-                        // Save inside demo UI state
-                        demoMinOverride = newMin
-                        demoMaxOverride = newMax
+                            val oldStatus = current.alerts
+                                .firstOrNull {
+                                    it.alertId == alertId
+                                }
+                                ?.status
 
-                        snapshot = snapshot?.copy(
-                            storage = data.storage.copy(
-                                minTemperature = newMin,
-                                maxTemperature = newMax
-                            )
-                        )
+                            val validTransition =
+                                (oldStatus == "OPEN" &&
+                                        newStatus == "ACKNOWLEDGED") ||
+                                        (oldStatus == "ACKNOWLEDGED" &&
+                                                newStatus == "RESOLVED")
 
-                        showLimitEditor = false
+                            if (validTransition) {
 
-                    } else {
+                                demoAlertOverrides[alertId] = newStatus
 
-                        scope.launch {
-                            savingLimits = true
-                            limitSaveError = null
-
-                            try {
-                                val updatedStorage =
-                                    repository.updateLimits(
-                                        storageId = data.storage.storageId,
-                                        minimum = newMin,
-                                        maximum = newMax
-                                    )
-
-                                snapshot = snapshot?.copy(
-                                    storage = updatedStorage
+                                snapshot = current.copy(
+                                    alerts = current.alerts.map { alert ->
+                                        if (alert.alertId == alertId) {
+                                            alert.copy(status = newStatus)
+                                        } else {
+                                            alert
+                                        }
+                                    }
                                 )
-
-                                showLimitEditor = false
-
-                            } catch (e: Exception) {
-                                limitSaveError =
-                                    "Unable to save limits. " +
-                                            "Check your Admin login and permissions."
-                            } finally {
-                                savingLimits = false
                             }
                         }
                     }
                 }
             )
+
         }
     }
 

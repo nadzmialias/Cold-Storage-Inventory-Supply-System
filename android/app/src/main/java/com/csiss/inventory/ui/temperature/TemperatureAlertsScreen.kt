@@ -8,22 +8,24 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.Alignment
 import com.csiss.inventory.data.TemperatureAlert
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val AlertPageBackground = Color(0xFFF1F6FB)
-private val AlertPageNavy = Color(0xFF132945)
-private val AlertPageMuted = Color(0xFF718198)
-private val AlertPageRed = Color(0xFFE45465)
+private val Navy = Color(0xFF132945)
+private val Background = Color(0xFFF1F6FB)
+private val Muted = Color(0xFF718198)
+private val AlertRed = Color(0xFFE45465)
+private val WarningOrange = Color(0xFFE59A23)
+private val SuccessGreen = Color(0xFF159C76)
 
 @Composable
 fun TemperatureAlertsScreen(
@@ -31,19 +33,26 @@ fun TemperatureAlertsScreen(
     isLoading: Boolean,
     errorMessage: String?,
     onBack: () -> Unit,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    canChangeStatus: Boolean,
+    onStatusChange: (Long, String) -> Unit
 ) {
     val sortedAlerts = alerts.sortedByDescending {
         it.createdAt
     }
 
+    val unresolvedCount = alerts.count {
+        it.status == "OPEN" ||
+                it.status == "ACKNOWLEDGED"
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(AlertPageBackground)
+            .background(Background)
     ) {
 
-        // Header
+        // HEADER
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -52,44 +61,38 @@ fun TemperatureAlertsScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             TextButton(onClick = onBack) {
-                Text(
-                    "← Back",
-                    color = AlertPageNavy
-                )
+                Text("← Back", color = Navy)
             }
 
             Text(
                 "Temperature Alerts",
-                fontSize = 18.sp,
+                color = Navy,
                 fontWeight = FontWeight.Bold,
-                color = AlertPageNavy
+                fontSize = 18.sp
             )
-
             Button(
-                onClick = onRefresh,
+                onClick = { onRefresh },
                 enabled = !isLoading,
+                shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = AlertPageNavy
+                    containerColor = Navy,
+                    contentColor = Color.White
                 ),
                 contentPadding = PaddingValues(
-                    horizontal = 12.dp,
-                    vertical = 6.dp
+                    horizontal = 14.dp,
+                    vertical = 8.dp
                 )
             ) {
-                Text("Refresh", fontSize = 11.sp)
+                Text("Refresh")
             }
         }
 
         Text(
-            text = "${alerts.size} temperature alerts",
-            modifier = Modifier.padding(
-                horizontal = 20.dp
-            ),
-            color = AlertPageMuted,
+            text = "$unresolvedCount unresolved • ${alerts.size} total",
+            modifier = Modifier.padding(horizontal = 20.dp),
+            color = Muted,
             fontSize = 13.sp
         )
-
-        Spacer(Modifier.height(12.dp))
 
         if (isLoading) {
             LinearProgressIndicator(
@@ -101,15 +104,30 @@ fun TemperatureAlertsScreen(
             Text(
                 text = errorMessage,
                 modifier = Modifier.padding(20.dp),
-                color = AlertPageRed
+                color = AlertRed
             )
         }
 
+        if (!canChangeStatus) {
+            Text(
+                text = "Alert management is read-only " +
+                        "until live permissions are enabled.",
+                modifier = Modifier.padding(
+                    horizontal = 20.dp,
+                    vertical = 8.dp
+                ),
+                color = Muted,
+                fontSize = 12.sp
+            )
+        }
+
+        // ALL ALERTS
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+
             if (
                 sortedAlerts.isEmpty() &&
                 !isLoading &&
@@ -119,13 +137,12 @@ fun TemperatureAlertsScreen(
                     Card(
                         colors = CardDefaults.cardColors(
                             containerColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(18.dp)
+                        )
                     ) {
                         Text(
                             "No temperature alerts recorded.",
-                            modifier = Modifier.padding(24.dp),
-                            color = AlertPageMuted
+                            modifier = Modifier.padding(20.dp),
+                            color = Muted
                         )
                     }
                 }
@@ -135,25 +152,38 @@ fun TemperatureAlertsScreen(
                 items = sortedAlerts,
                 key = { it.alertId }
             ) { alert ->
-                TemperatureAlertItem(alert)
+
+                TemperatureAlertItem(
+                    alert = alert,
+                    enabled = canChangeStatus && !isLoading,
+                    onStatusChange = { newStatus ->
+                        onStatusChange(
+                            alert.alertId,
+                            newStatus
+                        )
+                    }
+                )
             }
         }
     }
 }
 
+
+// ========================================
+// SINGLE ALERT CARD
+// ========================================
+
 @Composable
 private fun TemperatureAlertItem(
-    alert: TemperatureAlert
+    alert: TemperatureAlert,
+    enabled: Boolean,
+    onStatusChange: (String) -> Unit
 ) {
-    val isOpen = alert.status.equals(
-        "OPEN",
-        ignoreCase = true
-    )
-
-    val statusColor = if (isOpen) {
-        Color(0xFFE45465)
-    } else {
-        Color(0xFF159C76)
+    val statusColor = when (alert.status) {
+        "OPEN" -> AlertRed
+        "ACKNOWLEDGED" -> WarningOrange
+        "RESOLVED" -> SuccessGreen
+        else -> Muted
     }
 
     Card(
@@ -165,20 +195,22 @@ private fun TemperatureAlertItem(
     ) {
         Column(
             modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement =
                     Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+
                 Text(
                     text = alert.title,
                     modifier = Modifier.weight(1f),
-                    fontWeight = FontWeight.Bold,
-                    color = AlertPageNavy,
-                    fontSize = 15.sp
+                    color = Navy,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
                 )
 
                 Surface(
@@ -187,35 +219,100 @@ private fun TemperatureAlertItem(
                 ) {
                     Text(
                         text = alert.status,
+                        color = statusColor,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(
                             horizontal = 10.dp,
-                            vertical = 5.dp
-                        ),
-                        color = statusColor,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
+                            vertical = 6.dp
+                        )
                     )
                 }
             }
 
             Text(
                 text = alert.message,
-                color = Color(0xFF475569),
-                fontSize = 13.sp
+                fontSize = 13.sp,
+                color = Color(0xFF475569)
+            )
+
+            Text(
+                text = formatAlertTime(alert.createdAt),
+                color = Muted,
+                fontSize = 12.sp
             )
 
             HorizontalDivider(
                 color = Color(0xFFE8EEF5)
             )
 
-            Text(
-                text = formatAlertTime(alert.createdAt),
-                color = AlertPageMuted,
-                fontSize = 12.sp
-            )
+            // STATUS ACTIONS
+            when (alert.status) {
+
+                "OPEN" -> {
+                    Button(
+                        onClick = {
+                            onStatusChange("ACKNOWLEDGED")
+                        },
+                        enabled = enabled,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Navy,
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Text("Acknowledge Alert")
+                    }
+                }
+
+                "ACKNOWLEDGED" -> {
+                    Button(
+                        onClick = {
+                            onStatusChange("RESOLVED")
+                        },
+                        enabled = enabled,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = SuccessGreen,
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Text("Mark as Resolved")
+                    }
+                }
+
+                "RESOLVED" -> {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement =
+                            Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            "✓",
+                            color = SuccessGreen,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Text(
+                            "Alert Resolved",
+                            color = SuccessGreen,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+            }
         }
     }
 }
+
+
+// ========================================
+// FORMAT TIMESTAMP
+// ========================================
 
 private fun formatAlertTime(value: String): String {
     return runCatching {

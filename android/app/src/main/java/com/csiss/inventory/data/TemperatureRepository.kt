@@ -131,6 +131,38 @@ class TemperatureRepository {
     }
 
 
+    //UPDATE TEMP LIMIT
+    suspend fun updateLimits(
+        storageId: Long,
+        minimum: Double,
+        maximum: Double
+    ): StorageArea {
+
+        require(
+            minimum.isFinite() &&
+                    maximum.isFinite() &&
+                    minimum < maximum
+        ) {
+            "Invalid temperature limits"
+        }
+
+        return client.from("storage_areas")
+            .update(
+                {
+                    set("min_temperature", minimum)
+                    set("max_temperature", maximum)
+                }
+            ) {
+                select()
+
+                filter {
+                    eq("storage_id", storageId)
+                }
+            }
+            .decodeSingle<StorageArea>()
+    }
+
+
     private suspend fun loadAllAlerts(): List<TemperatureAlert> {
         val allAlerts = mutableListOf<TemperatureAlert>()
         val pageSize = 200L
@@ -228,36 +260,6 @@ class TemperatureRepository {
             logs = logs,
             alerts = alerts
         )
-    }
-
-    suspend fun updateLimits(
-        storageId: Long,
-        minimum: Double,
-        maximum: Double
-    ): StorageArea {
-
-        require(
-            minimum.isFinite() &&
-                    maximum.isFinite() &&
-                    minimum < maximum
-        ) {
-            "Invalid temperature limits"
-        }
-
-        return client.from("storage_areas")
-            .update(
-                {
-                    set("min_temperature", minimum)
-                    set("max_temperature", maximum)
-                }
-            ) {
-                select()
-
-                filter {
-                    eq("storage_id", storageId)
-                }
-            }
-            .decodeSingle<StorageArea>()
     }
 
 }
