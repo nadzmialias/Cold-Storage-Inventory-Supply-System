@@ -1,0 +1,17 @@
+CREATE TABLE products (
+    product_id INT AUTO_INCREMENT PRIMARY KEY,
+    product_code VARCHAR(30) NOT NULL UNIQUE,
+    product_name VARCHAR(100) NOT NULL,
+    category VARCHAR(50),
+    unit VARCHAR(20),
+    min_stock_level DECIMAL(12,3) DEFAULT 0.000,
+    is_active TINYINT(1) DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO products (product_code, product_name, category, unit, min_stock_level) VALUES
+('PRD001', 'Frozen Chicken Breast', 'Frozen Meat', 'kg', 50.000),
+('PRD002', 'Tiger Prawns', 'Seafood', 'kg', 30.000),
+('PRD003', 'Vanilla Ice Cream 1L', 'Dairy', 'pcs', 100.000),
+('PRD004', 'Mixed Vegetables 500g', 'Frozen Vegetables', 'pcs', 80.000),
+('PRD005', 'Beef Patties', 'Frozen Meat', 'box', 40.000);
