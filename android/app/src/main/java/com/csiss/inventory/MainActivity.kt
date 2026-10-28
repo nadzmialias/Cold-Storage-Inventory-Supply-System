@@ -20,7 +20,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             CSISSTheme {
-                TemperatureScreen(useDemoData = true)
+                TemperatureScreen( useDemoData = false,
+                    canEditLimits = true)
             }
         }
     }

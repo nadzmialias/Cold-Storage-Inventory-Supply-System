@@ -33,3 +33,6 @@ backups/
 # Operating system files
 .DS_Store
 Thumbs.db
+
+# ESP32 Wi-Fi and Supabase credentials
+iot/csiss_esp32/secrets.h

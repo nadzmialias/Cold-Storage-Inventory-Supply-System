@@ -54,6 +54,10 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.tween
 import androidx.activity.compose.BackHandler
+import com.csiss.inventory.data.SupabaseClientProvider
+import io.github.jan.supabase.auth.auth
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 
 // CSISS color palette
 private val Navy = Color(0xFF132945)
@@ -94,6 +98,14 @@ fun TemperatureScreen(
         mutableStateOf(false)
     }
 
+    var alertUpdating by remember {
+        mutableStateOf(false)
+    }
+
+    var alertActionError by remember {
+        mutableStateOf<String?>(null)
+    }
+
     var savingLimits by remember {
         mutableStateOf(false)
     }
@@ -109,6 +121,8 @@ fun TemperatureScreen(
     var demoMaxOverride by remember {
         mutableStateOf<Double?>(null)
     }
+
+
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -161,6 +175,19 @@ fun TemperatureScreen(
                     "Check your connection and login."
         } finally {
             loading = false
+        }
+    }
+
+    LaunchedEffect(useDemoData) {
+
+        if (!useDemoData) {
+
+            while (true) {
+
+                delay(20_000L)
+
+                refresh++
+            }
         }
     }
 
@@ -247,10 +274,10 @@ fun TemperatureScreen(
                         ?.recordedAt,
                     currentTime = currentTime,
                     demoMode = useDemoData,
-                    isLoading = loading
+                    isLoading =  loading && snapshot == null
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                //Spacer(modifier = Modifier.height(12.dp))
 
                 AlertsStatusButton(
                     alertCount = snapshot?.alerts?.count { alert ->
@@ -519,32 +546,37 @@ fun TemperatureScreen(
             modifier = Modifier.fillMaxSize()
         ) {
 
+
             TemperatureAlertsScreen(
                 alerts = snapshot?.alerts.orEmpty(),
-                isLoading = loading,
-                errorMessage = error,
+
+                isLoading = loading || alertUpdating,
+
+                errorMessage = alertActionError ?: error,
 
                 onBack = {
                     showAlertsPage = false
+                    alertActionError = null
                 },
 
                 onRefresh = {
+                    alertActionError = null
                     refresh++
                 },
 
-                // Changes are enabled in demo mode only
-                canChangeStatus = useDemoData,
+                canChangeStatus = true,
 
                 onStatusChange = { alertId, newStatus ->
 
                     if (useDemoData) {
+
+                        // Keep existing demo functionality.
                         snapshot?.let { current ->
 
                             val oldStatus = current.alerts
                                 .firstOrNull {
                                     it.alertId == alertId
-                                }
-                                ?.status
+                                }?.status
 
                             val validTransition =
                                 (oldStatus == "OPEN" &&
@@ -553,7 +585,6 @@ fun TemperatureScreen(
                                                 newStatus == "RESOLVED")
 
                             if (validTransition) {
-
                                 demoAlertOverrides[alertId] = newStatus
 
                                 snapshot = current.copy(
@@ -567,9 +598,49 @@ fun TemperatureScreen(
                                 )
                             }
                         }
+
+                    } else {
+
+                        // Live mode: save to Supabase.
+                        scope.launch {
+                            alertUpdating = true
+                            alertActionError = null
+
+                            try {
+                                val updatedAlert =
+                                    repository.updateAlertStatus(
+                                        alertId = alertId,
+                                        newStatus = newStatus
+                                    )
+
+                                // Update the screen after the database
+                                // confirms a successful change.
+                                snapshot = snapshot?.let { current ->
+                                    current.copy(
+                                        alerts = current.alerts.map { alert ->
+                                            if (alert.alertId == alertId) {
+                                                updatedAlert
+                                            } else {
+                                                alert
+                                            }
+                                        }
+                                    )
+                                }
+
+                            } catch (e: Exception) {
+                                alertActionError =
+                                    "Unable to update alert. " +
+                                            "Check your connection, login " +
+                                            "and permissions."
+
+                            } finally {
+                                alertUpdating = false
+                            }
+                        }
                     }
                 }
             )
+
 
         }
     }
@@ -1139,7 +1210,7 @@ private fun SensorConnectionIndicator(
     // Recent if within 5 minutes.
     // Allow up to 2 minutes of clock difference.
     val isConnected = secondsSinceReading != null &&
-            secondsSinceReading in -120L..300L
+            secondsSinceReading in -120L..180L
 
     val statusColor = when {
         isLoading -> TextMuted
