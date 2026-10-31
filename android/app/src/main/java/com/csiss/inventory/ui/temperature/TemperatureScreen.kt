@@ -1,63 +1,58 @@
-
 package com.csiss.inventory.ui.temperature
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathMeasure
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.csiss.inventory.data.*
+import java.time.Duration
+import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.time.Instant
-import java.time.Duration
 import kotlinx.coroutines.delay
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.KeyboardType
 import kotlinx.coroutines.launch
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.core.tween
-import androidx.activity.compose.BackHandler
+
 
 // CSISS color palette
 private val Navy = Color(0xFF132945)
-private val DeepBlue = Color(0xFF1D466B)
 private val IceBlue = Color(0xFF34B9DB)
 private val Background = Color(0xFFF1F6FB)
 private val TextDark = Color(0xFF182B48)
@@ -76,6 +71,8 @@ fun TemperatureScreen(
         mutableStateOf<TemperatureSnapshot?>(null)
     }
     var loading by remember { mutableStateOf(true) }
+    // Only show the button spinner for a user-requested refresh.
+    var manualRefreshPending by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var refresh by remember { mutableIntStateOf(0) }
     var showAlertsPage by remember {
@@ -94,6 +91,14 @@ fun TemperatureScreen(
         mutableStateOf(false)
     }
 
+    var alertUpdating by remember {
+        mutableStateOf(false)
+    }
+
+    var alertActionError by remember {
+        mutableStateOf<String?>(null)
+    }
+
     var savingLimits by remember {
         mutableStateOf(false)
     }
@@ -110,6 +115,8 @@ fun TemperatureScreen(
         mutableStateOf<Double?>(null)
     }
 
+
+
     LaunchedEffect(Unit) {
         while (true) {
             delay(30_000L)
@@ -118,12 +125,11 @@ fun TemperatureScreen(
     }
 
     LaunchedEffect(useDemoData, refresh) {
+        val requestId = refresh
         loading = true
         error = null
-
         try {
             snapshot = if (useDemoData) {
-
                 val demo = repository.loadDemo()
 
                 // Keep previously edited temperature limits
@@ -160,7 +166,23 @@ fun TemperatureScreen(
             error = "Unable to retrieve temperature data. " +
                     "Check your connection and login."
         } finally {
-            loading = false
+            if (requestId == refresh) {
+                loading = false
+                manualRefreshPending = false
+            }
+        }
+    }
+
+    LaunchedEffect(useDemoData) {
+
+        if (!useDemoData) {
+
+            while (true) {
+
+                delay(20_000L)
+
+                refresh++
+            }
         }
     }
 
@@ -172,7 +194,11 @@ fun TemperatureScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Background)
-            .safeDrawingPadding()
+            .windowInsetsPadding(
+                WindowInsets.safeDrawing.only(
+                    WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom
+                )
+            )
     ) {
 
         Column(
@@ -180,92 +206,64 @@ fun TemperatureScreen(
                 .fillMaxSize()
                 .background(Background)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+                .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
 
-            // Header
+            // Header: the primary information is the location, not the refresh action.
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
+                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text(
-                        text = "CSISS / MONITORING",
+                        text = "TEMPERATURE MONITORING",
                         color = TextMuted,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
                         letterSpacing = 1.sp
                     )
-
                     Text(
                         text = "Cold Storage",
                         color = TextDark,
                         fontSize = 27.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.SemiBold
                     )
-
-
                 }
 
-
-                Button(
-                    onClick = { refresh++ },
-                    enabled = !loading,
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Navy,
-                        contentColor = Color.White
-                    ),
-                    contentPadding = PaddingValues(
-                        horizontal = 14.dp,
-                        vertical = 8.dp
-                    )
-                ) {
-                    Text("Refresh")
-                }
-            }
-
-
-// ========================================
-// SENSOR INDICATOR + ALERTS BUTTON
-// ========================================
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                SensorConnectionIndicator(
-                    lastReadingAt = snapshot
-                        ?.logs
-                        ?.firstOrNull()
-                        ?.recordedAt,
-                    currentTime = currentTime,
-                    demoMode = useDemoData,
-                    isLoading = loading
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                AlertsStatusButton(
-                    alertCount = snapshot?.alerts?.count { alert ->
-                        alert.status == "OPEN" ||
-                                alert.status == "ACKNOWLEDGED"
-                    } ?: 0,
-
+                // Stable label and button size, with an animated outline on manual refresh.
+                OutlineRefreshButton(
                     onClick = {
-                        showAlertsPage = true
+                        manualRefreshPending = true
+                        refresh++
                     },
+                    isRefreshing = manualRefreshPending,
+                    enabled = !loading
                 )
             }
 
+            // Put sensor connectivity and alerts together above the live reading.
+            snapshot?.let { data ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    SensorConnectionIndicator(
+                        lastReadingAt = data.logs.firstOrNull()?.recordedAt,
+                        currentTime = currentTime
+                    )
+                    AlertsStatusButton(
+                        alertCount = data.alerts.count { alert ->
+                            alert.status == "OPEN" || alert.status == "ACKNOWLEDGED"
+                        },
+                        onClick = { showAlertsPage = true }
+                    )
+                }
+            }
 
-            if (loading) {
+            if (loading && snapshot == null) {
                 LinearProgressIndicator(
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -282,7 +280,7 @@ fun TemperatureScreen(
             snapshot?.let { data ->
 
                 // Main temperature display
-                TemperatureHero(data)
+                TemperatureHero(data = data)
 
                 // Minimum and Maximum temperature cards
                 Row(
@@ -292,33 +290,33 @@ fun TemperatureScreen(
                     MetricCard(
                         title = "MINIMUM",
                         value = formatTemp(data.storage.minTemperature),
-                        symbol = "↓",
                         modifier = Modifier.weight(1f)
                     )
 
                     MetricCard(
                         title = "MAXIMUM",
                         value = formatTemp(data.storage.maxTemperature),
-                        symbol = "↑",
                         modifier = Modifier.weight(1f)
                     )
                 }
 
                 // Edit Limits button below the cards
                 if (canEditLimits) {
-                    OutlinedButton(
+                    Button(
                         onClick = {
                             limitSaveError = null
                             showLimitEditor = true
                         },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Navy,
                             contentColor = Color.White
                         )
                     ) {
-                        Text("Edit Limits")
+                        Text("Edit Limits", fontWeight = FontWeight.SemiBold)
                     }
                 }
 
@@ -519,32 +517,37 @@ fun TemperatureScreen(
             modifier = Modifier.fillMaxSize()
         ) {
 
+
             TemperatureAlertsScreen(
                 alerts = snapshot?.alerts.orEmpty(),
-                isLoading = loading,
-                errorMessage = error,
+                isLoading = loading || alertUpdating,
+                isRefreshing = manualRefreshPending,
+                errorMessage = alertActionError ?: error,
 
                 onBack = {
                     showAlertsPage = false
+                    alertActionError = null
                 },
 
                 onRefresh = {
+                    alertActionError = null
+                    manualRefreshPending = true
                     refresh++
                 },
 
-                // Changes are enabled in demo mode only
-                canChangeStatus = useDemoData,
+                canChangeStatus = true,
 
                 onStatusChange = { alertId, newStatus ->
 
                     if (useDemoData) {
+
+                        // Keep existing demo functionality.
                         snapshot?.let { current ->
 
                             val oldStatus = current.alerts
                                 .firstOrNull {
                                     it.alertId == alertId
-                                }
-                                ?.status
+                                }?.status
 
                             val validTransition =
                                 (oldStatus == "OPEN" &&
@@ -553,7 +556,6 @@ fun TemperatureScreen(
                                                 newStatus == "RESOLVED")
 
                             if (validTransition) {
-
                                 demoAlertOverrides[alertId] = newStatus
 
                                 snapshot = current.copy(
@@ -567,9 +569,49 @@ fun TemperatureScreen(
                                 )
                             }
                         }
+
+                    } else {
+
+                        // Live mode: save to Supabase.
+                        scope.launch {
+                            alertUpdating = true
+                            alertActionError = null
+
+                            try {
+                                val updatedAlert =
+                                    repository.updateAlertStatus(
+                                        alertId = alertId,
+                                        newStatus = newStatus
+                                    )
+
+                                // Update the screen after the database
+                                // confirms a successful change.
+                                snapshot = snapshot?.let { current ->
+                                    current.copy(
+                                        alerts = current.alerts.map { alert ->
+                                            if (alert.alertId == alertId) {
+                                                updatedAlert
+                                            } else {
+                                                alert
+                                            }
+                                        }
+                                    )
+                                }
+
+                            } catch (e: Exception) {
+                                alertActionError =
+                                    "Unable to update alert. " +
+                                            "Check your connection, login " +
+                                            "and permissions."
+
+                            } finally {
+                                alertUpdating = false
+                            }
+                        }
                     }
                 }
             )
+
 
         }
     }
@@ -578,21 +620,30 @@ fun TemperatureScreen(
 
 // ========================================
 // MAIN TEMPERATURE HERO CARD
+// Keep the existing purple gradient, with a more disciplined hierarchy.
 // ========================================
 
 @Composable
 private fun TemperatureHero(data: TemperatureSnapshot) {
     val latest = data.logs.firstOrNull()
-    val abnormal = latest != null &&
-            (
-                    latest.temperature < data.storage.minTemperature ||
-                            latest.temperature > data.storage.maxTemperature
-                    )
+    val abnormal = latest != null && (
+        latest.temperature < data.storage.minTemperature ||
+            latest.temperature > data.storage.maxTemperature
+    )
+    val statusLabel = when {
+        latest == null -> "NO READING"
+        abnormal -> "OUT OF RANGE"
+        else -> "WITHIN RANGE"
+    }
+    val statusColor = when {
+        latest == null -> Color(0xFFDAE3EF)
+        abnormal -> Color(0xFFFFBEC6)
+        else -> Color(0xFF98F0CD)
+    }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-
             .background(
                 brush = Brush.linearGradient(
                     colors = listOf(
@@ -601,34 +652,32 @@ private fun TemperatureHero(data: TemperatureSnapshot) {
                         Color(0xFF6651A7)
                     )
                 ),
-                shape = RoundedCornerShape(26.dp)
+                shape = RoundedCornerShape(24.dp)
             )
-
-            .padding(22.dp),
+            .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                data.storage.storageName,
-                color = Color.White,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 17.sp
-            )
-
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .background(
-                        Color.White.copy(alpha = 0.12f),
-                        RoundedCornerShape(14.dp)
-                    ),
-                contentAlignment = Alignment.Center
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text("❄", fontSize = 24.sp)
+                Text(
+                    text = data.storage.storageName,
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 17.sp,
+                    maxLines = 2
+                )
+                Text(
+                    text = "TEMPERATURE SENSOR",
+                    color = Color(0xFFBECBE6),
+                    fontSize = 10.sp,
+                    letterSpacing = 0.9.sp
+                )
             }
         }
 
@@ -638,109 +687,76 @@ private fun TemperatureHero(data: TemperatureSnapshot) {
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                "LATEST RECORDED TEMPERATURE",
-                color = Color(0xFFB8CFE2),
-                fontSize = 11.sp,
-                letterSpacing = 1.sp
+                text = "LATEST RECORDED TEMPERATURE",
+                color = Color(0xFFD2DBED),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = 0.8.sp
             )
-
             Text(
-                latest?.let { formatTemp(it.temperature) } ?: "--",
+                text = latest?.let { formatTemp(it.temperature) } ?: "--",
                 color = Color.White,
                 fontSize = 52.sp,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.SemiBold
             )
-
-            val status = when {
-                latest == null -> "NO DATA"
-                abnormal -> "ABNORMAL"
-                else -> "NORMAL"
-            }
-
-            val statusColor = when {
-                latest == null -> Color(0xFFCAD8E8)
-                abnormal -> Color(0xFFFFB2BB)
-                else -> Color(0xFF8FF1C6)
-            }
-
-            Box(
-                modifier = Modifier
-                    .background(
-                        statusColor.copy(alpha = 0.15f),
-                        RoundedCornerShape(50.dp)
-                    )
-                    .padding(horizontal = 16.dp, vertical = 7.dp)
+            Surface(
+                color = statusColor.copy(alpha = 0.16f),
+                shape = RoundedCornerShape(50.dp)
             ) {
                 Text(
-                    "● $status",
+                    text = statusLabel,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                     color = statusColor,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.5.sp
                 )
             }
         }
 
-        HorizontalDivider(
-            color = Color.White.copy(alpha = 0.15f)
-        )
+        HorizontalDivider(color = Color.White.copy(alpha = 0.16f))
 
-        Column(
+        Text(
+            text = latest?.let { "Recorded ${formatTime(it.recordedAt)}" }
+                ?: "Waiting for sensor readings",
             modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                latest?.let {
-                    "Recorded ${formatTime(it.recordedAt)}"
-                } ?: "Waiting for sensor readings",
-                color = Color(0xFFBCD2E5),
-                fontSize = 12.sp
-            )
-        }
+            color = Color(0xFFD2DBED),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Normal,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
     }
 }
 
 // ========================================
-// METRIC CARDS
+// MINIMUM / MAXIMUM TEMPERATURE CARDS
 // ========================================
 
 @Composable
 private fun MetricCard(
     title: String,
     value: String,
-    symbol: String,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier
-            .background(
-                Color.White,
-                RoundedCornerShape(20.dp)
-            )
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .background(Color.White, RoundedCornerShape(18.dp))
+            .border(1.dp, Color(0xFFE7EEF4), RoundedCornerShape(18.dp))
+            .padding(18.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                symbol,
-                color = IceBlue,
-                fontSize = 18.sp
-            )
-            Text(
-                title,
-                color = TextMuted,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
         Text(
-            value,
+            text = title,
+            color = TextMuted,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.6.sp
+        )
+        Text(
+            text = value,
             color = TextDark,
-            fontSize = 23.sp,
-            fontWeight = FontWeight.Bold
+            fontSize = 24.sp,
+            fontWeight = FontWeight.SemiBold
         )
     }
 }
@@ -801,7 +817,7 @@ private fun TemperatureChart(
                 fontSize = 11.sp
             )
             Text(
-                "● Normal    ● Abnormal",
+                "Limit markers",
                 color = TextMuted,
                 fontSize = 11.sp
             )
@@ -899,7 +915,7 @@ private fun TemperatureChart(
         }
 
         Text(
-            "Blue points: within range. Red points: outside range.",
+            "Blue: within limits  ·  Red: outside limits",
             color = TextMuted,
             fontSize = 11.sp
         )
@@ -907,81 +923,17 @@ private fun TemperatureChart(
 }
 
 // ========================================
-// ALERT CARD
-// ========================================
-
-@Composable
-private fun AlertCard(alert: TemperatureAlert) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                Color(0xFFFFF1F2),
-                RoundedCornerShape(18.dp)
-            )
-            .border(
-                1.dp,
-                Color(0xFFFFDDE2),
-                RoundedCornerShape(18.dp)
-            )
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text("!", color = AlertRed, fontWeight = FontWeight.Bold)
-
-            Text(
-                alert.title,
-                color = Color(0xFF9A263B),
-                fontWeight = FontWeight.Bold,
-                fontSize = 14.sp
-            )
-        }
-
-        Text(
-            alert.message,
-            color = Color(0xFF8D4A57),
-            fontSize = 13.sp
-        )
-
-        Text(
-            "${alert.status} · ${formatTime(alert.createdAt)}",
-            color = Color(0xFFAD6371),
-            fontSize = 11.sp
-        )
-    }
-}
-
-// ========================================
-// SMALL REUSABLE COMPONENTS
+// SHARED DISPLAY HELPERS
 // ========================================
 
 @Composable
 private fun SectionHeading(title: String) {
     Text(
-        title,
+        text = title,
         color = TextDark,
         fontSize = 18.sp,
-        fontWeight = FontWeight.Bold
+        fontWeight = FontWeight.SemiBold
     )
-}
-
-@Composable
-private fun InfoCard(message: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                Color.White,
-                RoundedCornerShape(18.dp)
-            )
-            .padding(18.dp)
-    ) {
-        Text(message, color = TextMuted)
-    }
 }
 
 private fun formatTemp(value: Double): String =
@@ -1122,143 +1074,47 @@ private fun EditTemperatureLimitsDialog(
 @Composable
 private fun SensorConnectionIndicator(
     lastReadingAt: String?,
-    currentTime: Instant,
-    demoMode: Boolean,
-    isLoading: Boolean
+    currentTime: Instant
 ) {
     val lastReading = lastReadingAt?.let {
-        runCatching {
-            OffsetDateTime.parse(it).toInstant()
-        }.getOrNull()
+        runCatching { OffsetDateTime.parse(it).toInstant() }.getOrNull()
     }
-
     val secondsSinceReading = lastReading?.let {
         Duration.between(it, currentTime).seconds
     }
+    // A recent reading is evidence of connection; allow modest clock skew.
+    val connected = secondsSinceReading != null &&
+        secondsSinceReading in -120L..180L
+    val statusColor = if (connected) NormalGreen else AlertRed
+    val statusLabel = if (connected) "ESP32 Connected" else "ESP32 Offline"
 
-    // Recent if within 5 minutes.
-    // Allow up to 2 minutes of clock difference.
-    val isConnected = secondsSinceReading != null &&
-            secondsSinceReading in -120L..300L
-
-    val statusColor = when {
-        isLoading -> TextMuted
-        isConnected -> NormalGreen
-        else -> AlertRed
-    }
-
-    val statusLabel = when {
-        isLoading -> "Checking sensor"
-        isConnected -> "ESP32 Connected"
-        else -> "ESP32 Disconnected"
-    }
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    Surface(
+        modifier = Modifier.semantics {
+            contentDescription = "Sensor status: $statusLabel"
+        },
+        color = statusColor.copy(alpha = 0.10f),
+        shape = RoundedCornerShape(50.dp)
     ) {
-        Surface(
-            color = statusColor.copy(alpha = 0.12f),
-            shape = RoundedCornerShape(50.dp)
+        Row(
+            modifier = Modifier.padding(horizontal = 13.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(
-                modifier = Modifier.padding(
-                    horizontal = 12.dp,
-                    vertical = 7.dp
-                ),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement =
-                    Arrangement.spacedBy(6.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .background(
-                            statusColor,
-                            CircleShape
-                        )
-                )
-
-                Text(
-                    text = statusLabel,
-                    color = statusColor,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-        }
-    }
-}
-
-
-@Composable
-private fun AlertIconButton(
-    onClick: () -> Unit
-) {
-    val alertColor = Color(0xFFEF2020)
-
-    IconButton(
-        onClick = onClick,
-        modifier = Modifier
-            .size(48.dp)
-            .semantics {
-                contentDescription = "Open temperature alerts"
-            }
-    ) {
-        Canvas(
-            modifier = Modifier.size(38.dp)
-        ) {
-            val borderWidth = 3.5.dp.toPx()
-
-            // Rounded square outline
-            drawRoundRect(
-                color = alertColor,
-                topLeft = Offset(
-                    borderWidth / 2,
-                    borderWidth / 2
-                ),
-                size = Size(
-                    size.width - borderWidth,
-                    size.height - borderWidth
-                ),
-                cornerRadius = CornerRadius(
-                    10.dp.toPx()
-                ),
-                style = Stroke(
-                    width = borderWidth
-                )
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(statusColor, CircleShape)
             )
-
-            val centerX = size.width / 2
-
-            // Exclamation mark vertical line
-            drawLine(
-                color = alertColor,
-                start = Offset(
-                    centerX,
-                    size.height * 0.25f
-                ),
-                end = Offset(
-                    centerX,
-                    size.height * 0.60f
-                ),
-                strokeWidth = 4.dp.toPx(),
-                cap = StrokeCap.Round
-            )
-
-            // Exclamation mark dot
-            drawCircle(
-                color = alertColor,
-                radius = 2.5.dp.toPx(),
-                center = Offset(
-                    centerX,
-                    size.height * 0.77f
-                )
+            Text(
+                text = statusLabel,
+                color = statusColor,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1
             )
         }
     }
 }
-
 
 @Composable
 private fun AlertsStatusButton(
@@ -1267,85 +1123,37 @@ private fun AlertsStatusButton(
     modifier: Modifier = Modifier
 ) {
     val hasAlerts = alertCount > 0
-
-    val accentColor = if (hasAlerts) {
-        Color(0xFFE53935) // Red
-    } else {
-        Color(0xFF159C76) // Green
-    }
-
-    val label = when {
-        alertCount <= 0 -> "No Alerts"
-        alertCount == 1 -> "1 Alert"
+    val accent = if (hasAlerts) AlertRed else NormalGreen
+    val label = when (alertCount) {
+        0 -> "No Alerts"
+        1 -> "1 Alert"
         else -> "$alertCount Alerts"
     }
 
     Surface(
-        modifier = modifier.clickable(onClick = onClick),
-        color = accentColor.copy(alpha = 0.12f),
+        modifier = modifier
+            .semantics { contentDescription = "Open temperature alerts: $label" }
+            .clickable(onClick = onClick),
+        color = accent.copy(alpha = 0.10f),
         shape = RoundedCornerShape(50.dp)
     ) {
         Row(
-            modifier = Modifier.padding(
-                horizontal = 12.dp,
-                vertical = 7.dp
-            ),
+            modifier = Modifier.padding(horizontal = 13.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-
-            // Rounded exclamation icon
-            Canvas(
-                modifier = Modifier.size(22.dp)
-            ) {
-                val stroke = 2.dp.toPx()
-
-                drawRoundRect(
-                    color = accentColor,
-                    topLeft = Offset(stroke / 2, stroke / 2),
-                    size = Size(
-                        size.width - stroke,
-                        size.height - stroke
-                    ),
-                    cornerRadius = CornerRadius(
-                        6.dp.toPx()
-                    ),
-                    style = Stroke(width = stroke)
-                )
-
-                val centerX = size.width / 2
-
-                drawLine(
-                    color = accentColor,
-                    start = Offset(
-                        centerX,
-                        size.height * 0.23f
-                    ),
-                    end = Offset(
-                        centerX,
-                        size.height * 0.58f
-                    ),
-                    strokeWidth = 2.5.dp.toPx(),
-                    cap = StrokeCap.Round
-                )
-
-                drawCircle(
-                    color = accentColor,
-                    radius = 1.5.dp.toPx(),
-                    center = Offset(
-                        centerX,
-                        size.height * 0.76f
-                    )
-                )
-            }
-
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(accent, CircleShape)
+            )
             Text(
                 text = label,
-                color = accentColor,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1
+                color = accent,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
             )
+            Text(text = "→", color = accent, fontSize = 14.sp)
         }
     }
 }

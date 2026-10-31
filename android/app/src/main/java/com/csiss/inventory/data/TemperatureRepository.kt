@@ -89,11 +89,14 @@ class TemperatureRepository {
 
     suspend fun loadLive(): TemperatureSnapshot {
 
+        // ==========================================
+        // 1. FETCH STORAGE AREA
+        // ==========================================
+
         val storage = client.from("storage_areas")
             .select(
                 columns = Columns.raw(
-                    "storage_id,storage_name," +
-                            "min_temperature,max_temperature"
+                    "storage_id,storage_name,min_temperature,max_temperature"
                 )
             ) {
                 filter {
@@ -102,7 +105,10 @@ class TemperatureRepository {
             }
             .decodeSingle<StorageArea>()
 
-        // Retrieve the latest 20 readings.
+        // ==========================================
+        // 2. FETCH LATEST TEMPERATURE READINGS
+        // ==========================================
+
         val logs = client.from("temperature_logs")
             .select(
                 columns = Columns.raw(
@@ -114,20 +120,47 @@ class TemperatureRepository {
                     eq("storage_id", storage.storageId)
                 }
 
-                order("recorded_at", Order.DESCENDING)
+                order(
+                    column = "recorded_at",
+                    order = Order.DESCENDING
+                )
+
                 limit(20)
             }
             .decodeList<TemperatureLog>()
 
-        // Retrieve abnormal temperature alerts.
-        val alerts = loadAllAlerts()
+        // ==========================================
+        // 3. FETCH TEMPERATURE ALERTS
+        // ==========================================
+
+        val alerts = client.from("system_alerts")
+            .select(
+                columns = Columns.raw(
+                    "alert_id,title,message,status,created_at"
+                )
+            ) {
+                filter {
+                    eq("alert_type", "TEMP_OUT_OF_RANGE")
+                }
+
+                order(
+                    column = "created_at",
+                    order = Order.DESCENDING
+                )
+
+                limit(100)
+            }
+            .decodeList<TemperatureAlert>()
+
+        // ==========================================
+        // 4. RETURN LIVE DATA
+        // ==========================================
 
         return TemperatureSnapshot(
             storage = storage,
             logs = logs,
             alerts = alerts
         )
-
     }
 
 
@@ -153,7 +186,11 @@ class TemperatureRepository {
                     set("max_temperature", maximum)
                 }
             ) {
-                select()
+                select(
+                    columns = Columns.raw(
+                        "storage_id,storage_name,min_temperature,max_temperature"
+                    )
+                )
 
                 filter {
                     eq("storage_id", storageId)
@@ -199,6 +236,49 @@ class TemperatureRepository {
 
         return allAlerts
     }
+
+
+    suspend fun updateAlertStatus(
+        alertId: Long,
+        newStatus: String
+    ): TemperatureAlert {
+
+        // Determine which transition is allowed.
+        val expectedStatus = when (newStatus) {
+            "ACKNOWLEDGED" -> "OPEN"
+            "RESOLVED" -> "ACKNOWLEDGED"
+            else -> throw IllegalArgumentException(
+                "Invalid alert status"
+            )
+        }
+
+        val updatedAlerts = client.from("system_alerts")
+            .update(
+                {
+                    set("status", newStatus)
+                }
+            ) {
+                select(
+                    columns = Columns.raw(
+                        "alert_id,title,message,status,created_at"
+                    )
+                )
+
+                filter {
+                    eq("alert_id", alertId)
+                    eq("alert_type", "TEMP_OUT_OF_RANGE")
+                    eq("status", expectedStatus)
+                }
+            }
+            .decodeList<TemperatureAlert>()
+
+        return updatedAlerts.singleOrNull()
+            ?: error(
+                "Alert could not be updated. " +
+                        "It may have changed or you may lack permission."
+            )
+    }
+
 
 
     // DEMO DATA FOR UI DEVELOPMENT
