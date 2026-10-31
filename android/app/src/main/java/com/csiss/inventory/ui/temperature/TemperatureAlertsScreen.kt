@@ -19,28 +19,6 @@ import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.RoundRect
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathMeasure
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.unit.dp
 
 private val Navy = Color(0xFF132945)
 private val Background = Color(0xFFF1F6FB)
@@ -60,8 +38,7 @@ fun TemperatureAlertsScreen(
     onStatusChange: (Long, String) -> Unit,
     isRefreshing: Boolean = false
 ) {
-    var manualRefreshPending by remember { mutableStateOf(false) }
-    var refresh by remember { mutableIntStateOf(0) }
+
     val sortedAlerts = alerts.sortedByDescending {
         it.createdAt
     }
@@ -77,38 +54,61 @@ fun TemperatureAlertsScreen(
             .background(Background)
     ) {
 
-        // HEADER
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .padding(
+                    horizontal = 20.dp,
+                    vertical = 12.dp
+                ),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            TextButton(onClick = onBack) {
-                Text("← Back", color = Navy)
+
+            // Back and Refresh buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+
+                TextButton(
+                    onClick = onBack,
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Text(
+                        text = "← Back",
+                        color = Navy,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                OutlineRefreshButton(
+                    onClick = onRefresh,
+                    isRefreshing = isRefreshing,
+                    enabled = !isLoading
+                )
             }
 
-            Text(
-                "Temperature Alerts",
-                color = Navy,
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp
-            )
+            // Title and alert count
+            Column(
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
 
-            OutlineRefreshButton(
-                onClick = onRefresh,
-                isRefreshing = manualRefreshPending,
-                enabled = !isLoading
-            )
+                Text(
+                    text = "Temperature Alerts",
+                    color = Navy,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 24.sp
+                )
+
+                Text(
+                    text = "$unresolvedCount unresolved • ${alerts.size} total",
+                    color = Muted,
+                    fontSize = 13.sp
+                )
+            }
         }
-
-        Text(
-            text = "$unresolvedCount unresolved • ${alerts.size} total",
-            modifier = Modifier.padding(horizontal = 20.dp),
-            color = Muted,
-            fontSize = 13.sp
-        )
 
         if (errorMessage != null) {
             Text(
@@ -133,7 +133,9 @@ fun TemperatureAlertsScreen(
 
         // ALL ALERTS
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
             contentPadding = PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -177,6 +179,7 @@ fun TemperatureAlertsScreen(
         }
     }
 }
+
 
 
 // ========================================
