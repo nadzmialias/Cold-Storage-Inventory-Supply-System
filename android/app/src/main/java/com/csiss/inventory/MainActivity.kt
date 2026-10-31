@@ -13,15 +13,66 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.csiss.inventory.ui.theme.CSISSTheme
 import com.csiss.inventory.ui.temperature.TemperatureScreen
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
+import com.csiss.inventory.ui.auth.CsissAuthGate
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.core.view.WindowCompat
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        WindowCompat.getInsetsController(
+            window,
+            window.decorView
+        ).isAppearanceLightStatusBars = true
         setContent {
-            CSISSTheme {
-                TemperatureScreen( useDemoData = false,
-                    canEditLimits = true)
+            MaterialTheme {
+                CsissAuthGate { currentUser, onLogout ->
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .statusBarsPadding()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement =
+                                Arrangement.SpaceBetween,
+                            verticalAlignment =
+                                Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = currentUser.fullName
+                                )
+                                Text(
+                                    text = currentUser.role
+                                )
+                            }
+                            TextButton(
+                                onClick = onLogout
+                            ) {
+                                Text("Logout")
+                            }
+                        }
+                        Box(
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            TemperatureScreen(
+                                useDemoData = false,
+                                canEditLimits =
+                                    currentUser.role == "ADMIN"
+                            )
+                        }
+                    }
+                }
             }
         }
     }

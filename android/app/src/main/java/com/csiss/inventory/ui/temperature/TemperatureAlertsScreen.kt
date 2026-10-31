@@ -19,6 +19,28 @@ import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathMeasure
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.dp
 
 private val Navy = Color(0xFF132945)
 private val Background = Color(0xFFF1F6FB)
@@ -35,8 +57,11 @@ fun TemperatureAlertsScreen(
     onBack: () -> Unit,
     onRefresh: () -> Unit,
     canChangeStatus: Boolean,
-    onStatusChange: (Long, String) -> Unit
+    onStatusChange: (Long, String) -> Unit,
+    isRefreshing: Boolean = false
 ) {
+    var manualRefreshPending by remember { mutableStateOf(false) }
+    var refresh by remember { mutableIntStateOf(0) }
     val sortedAlerts = alerts.sortedByDescending {
         it.createdAt
     }
@@ -70,21 +95,12 @@ fun TemperatureAlertsScreen(
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp
             )
-            Button(
-                onClick = { onRefresh },
-                enabled = !isLoading,
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Navy,
-                    contentColor = Color.White
-                ),
-                contentPadding = PaddingValues(
-                    horizontal = 14.dp,
-                    vertical = 8.dp
-                )
-            ) {
-                Text("Refresh")
-            }
+
+            OutlineRefreshButton(
+                onClick = onRefresh,
+                isRefreshing = manualRefreshPending,
+                enabled = !isLoading
+            )
         }
 
         Text(
@@ -93,12 +109,6 @@ fun TemperatureAlertsScreen(
             color = Muted,
             fontSize = 13.sp
         )
-
-        if (isLoading) {
-            LinearProgressIndicator(
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
 
         if (errorMessage != null) {
             Text(
@@ -206,7 +216,16 @@ private fun TemperatureAlertItem(
             ) {
 
                 Text(
-                    text = alert.title,
+                    text = if (
+                        alert.title.equals(
+                            "Abnormal Cold Storage Temperature",
+                            ignoreCase = true
+                        )
+                    ) {
+                        "Abnormal Temperature"
+                    } else {
+                        alert.title
+                    },
                     modifier = Modifier.weight(1f),
                     color = Navy,
                     fontSize = 15.sp,
