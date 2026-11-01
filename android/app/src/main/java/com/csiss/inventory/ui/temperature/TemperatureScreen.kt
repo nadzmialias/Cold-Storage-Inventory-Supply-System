@@ -1,4 +1,5 @@
 package com.csiss.inventory.ui.temperature
+import com.csiss.inventory.ui.components.OutlineRefreshButton
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -33,6 +34,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.csiss.inventory.data.*
+import com.csiss.inventory.ui.components.OutlineRefreshButton
 import java.time.Duration
 import java.time.Instant
 import java.time.OffsetDateTime
