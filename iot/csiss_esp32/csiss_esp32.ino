@@ -42,13 +42,13 @@ bool limitsLoaded = false;
 
 const unsigned long SENSOR_INTERVAL = 2000; //display temp at lcd hardware every 2 second
 const unsigned long UPLOAD_INTERVAL = 60000; //upload to database every 60 second
-const unsigned long RETRY_INTERVAL = 10000;
-const unsigned long WIFI_RETRY_INTERVAL = 15000;
-const unsigned long LIMITS_REFRESH_INTERVAL = 60000;
-const unsigned long LIMITS_FALLBACK_INTERVAL =
+const unsigned long RETRY_INTERVAL = 10000; //retry every 10 second if error during temp upload to db
+const unsigned long WIFI_RETRY_INTERVAL = 15000; //retry every 15 second if error connecting wifi
+const unsigned long LIMITS_REFRESH_INTERVAL = 60000; //retrieve temp every 60 second
+const unsigned long LIMITS_FALLBACK_INTERVAL = //check latest limit(max/min) every 15 min from db if realtime update is missed
   15UL * 60UL * 1000UL;
-const unsigned long LIMITS_RETRY_INTERVAL = 10000;
-const unsigned long REALTIME_HEARTBEAT_INTERVAL = 20000;
+const unsigned long LIMITS_RETRY_INTERVAL = 10000; //
+const unsigned long REALTIME_HEARTBEAT_INTERVAL = 20000; //send message to database to keep WebSocket connection active every 20 second
 
 float currentTemperature = NAN;
 
