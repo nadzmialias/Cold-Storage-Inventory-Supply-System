@@ -13,14 +13,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.csiss.inventory.ui.theme.CSISSTheme
 import com.csiss.inventory.ui.temperature.TemperatureScreen
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.*
+  import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import com.csiss.inventory.ui.auth.CsissAuthGate
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.core.view.WindowCompat
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import com.csiss.inventory.ui.inventory.InventoryScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,6 +37,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 CsissAuthGate { currentUser, onLogout ->
+                    var showInventory by rememberSaveable { mutableStateOf(false) }
 
                     Column(
                         modifier = Modifier
@@ -62,14 +67,25 @@ class MainActivity : ComponentActivity() {
                                 Text("Logout")
                             }
                         }
-                        Box(
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            TemperatureScreen(
-                                useDemoData = false,
-                                canEditLimits =
-                                    currentUser.role == "ADMIN"
-                            )
+                        Row(modifier = Modifier.padding(horizontal = 12.dp)) {
+                            TextButton(onClick = { showInventory = false }) {
+                                Text("Temperature")
+                            }
+
+                            TextButton(onClick = { showInventory = true }) {
+                                Text("Inventory")
+                            }
+                        }
+
+                        Box(modifier = Modifier.weight(1f)) {
+                            if (showInventory) {
+                                InventoryScreen()
+                            } else {
+                                TemperatureScreen(
+                                    useDemoData = false,
+                                    canEditLimits = currentUser.role == "ADMIN"
+                                )
+                            }
                         }
                     }
                 }
