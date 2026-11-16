@@ -1,19 +1,31 @@
 package com.csiss.inventory
 
+import android.Manifest
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
+import com.csiss.inventory.data.AlertRepository
+import com.csiss.inventory.data.SystemAlertRow
 import com.csiss.inventory.ui.auth.CsissAuthGate
+import com.csiss.inventory.ui.notification.AlertNotificationHelper
+import com.csiss.inventory.ui.notification.NotificationScreen
 import com.csiss.inventory.ui.stock.StockScreen
 import com.csiss.inventory.ui.temperature.TemperatureScreen
 import com.csiss.inventory.ui.theme.CSISSTheme
@@ -30,7 +42,44 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 CsissAuthGate { currentUser, onLogout ->
-                    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Stock, 1 = Temperature
+                    val context = LocalContext.current
+                    val alertRepository = remember { AlertRepository() }
+
+                    // 0 = Stock, 1 = Temperature, 2 = Alerts
+                    var selectedTab by remember { mutableIntStateOf(0) }
+                    var openAlerts by remember { mutableStateOf<List<SystemAlertRow>>(emptyList()) }
+                    var openAlertCount by remember { mutableIntStateOf(0) }
+                    var showStartupAlertPopup by remember { mutableStateOf(false) }
+                    var hasShownPopupForSession by remember(currentUser.fullName) { mutableStateOf(false) }
+
+                    // Request Android 13+ notification permission for system pop-up banners
+                    val permissionLauncher = rememberLauncherForActivityResult(
+                        contract = ActivityResultContracts.RequestPermission()
+                    ) { _ -> }
+
+                    LaunchedEffect(Unit) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    }
+
+                    // Background check when user logs in or switches tabs
+                    LaunchedEffect(currentUser.fullName, selectedTab) {
+                        runCatching {
+                            val allAlerts = alertRepository.loadAndSyncAlerts()
+                            val activeList = allAlerts.filter { !it.isResolved }
+                            openAlerts = activeList
+                            openAlertCount = activeList.size
+
+                            if (activeList.isNotEmpty()) {
+                                AlertNotificationHelper.showSystemPopupIfNeeded(context, activeList)
+                                if (!hasShownPopupForSession) {
+                                    showStartupAlertPopup = true
+                                    hasShownPopupForSession = true
+                                }
+                            }
+                        }
+                    }
 
                     Scaffold(
                         modifier = Modifier
@@ -75,6 +124,27 @@ class MainActivity : ComponentActivity() {
                                     icon = { Text("🌡️") },
                                     label = { Text("Temperature") }
                                 )
+                                NavigationBarItem(
+                                    selected = selectedTab == 2,
+                                    onClick = { selectedTab = 2 },
+                                    icon = {
+                                        BadgedBox(
+                                            badge = {
+                                                if (openAlertCount > 0) {
+                                                    Badge(
+                                                        containerColor = Color(0xFFE45465),
+                                                        contentColor = Color.White
+                                                    ) {
+                                                        Text("$openAlertCount")
+                                                    }
+                                                }
+                                            }
+                                        ) {
+                                            Text("🔔")
+                                        }
+                                    },
+                                    label = { Text("Alerts") }
+                                )
                             }
                         }
                     ) { innerPadding ->
@@ -89,8 +159,84 @@ class MainActivity : ComponentActivity() {
                                     useDemoData = false,
                                     canEditLimits = currentUser.role == "ADMIN"
                                 )
+                                2 -> NotificationScreen(
+                                    onOpenCountChanged = { newCount ->
+                                        openAlertCount = newCount
+                                    }
+                                )
                             }
                         }
+                    }
+
+                    // Urgent Pop-Up Alert Dialog for Staff & Admin
+                    if (showStartupAlertPopup && openAlerts.isNotEmpty()) {
+                        AlertDialog(
+                            onDismissRequest = { showStartupAlertPopup = false },
+                            title = {
+                                Text(
+                                    text = "⚠️ Attention Required (${openAlerts.size} Active Alerts)",
+                                    color = Color(0xFFE45465),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 18.sp
+                                )
+                            },
+                            text = {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(
+                                        text = "The following cold storage items require immediate staff attention:",
+                                        fontSize = 13.sp,
+                                        color = Color(0xFF182B48)
+                                    )
+                                    openAlerts.take(3).forEach { alert ->
+                                        Surface(
+                                            color = Color(0xFFFFF1F2),
+                                            shape = RoundedCornerShape(10.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Column(modifier = Modifier.padding(10.dp)) {
+                                                Text(
+                                                    text = alert.title,
+                                                    color = Color(0xFFE45465),
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 13.sp
+                                                )
+                                                Text(
+                                                    text = alert.message,
+                                                    color = Color(0xFF182B48),
+                                                    fontSize = 12.sp
+                                                )
+                                            }
+                                        }
+                                    }
+                                    if (openAlerts.size > 3) {
+                                        Text(
+                                            text = "+ ${openAlerts.size - 3} more active alerts...",
+                                            fontSize = 12.sp,
+                                            color = Color(0xFF718198)
+                                        )
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                Button(
+                                    onClick = {
+                                        showStartupAlertPopup = false
+                                        selectedTab = 2
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF132945),
+                                        contentColor = Color.White
+                                    )
+                                ) {
+                                    Text("View Alerts Now")
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showStartupAlertPopup = false }) {
+                                    Text("Dismiss")
+                                }
+                            }
+                        )
                     }
                 }
             }
