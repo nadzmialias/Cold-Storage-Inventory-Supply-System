@@ -30,6 +30,10 @@ import com.csiss.inventory.ui.profile.ProfileScreen
 import com.csiss.inventory.ui.stock.StockScreen
 import com.csiss.inventory.ui.temperature.TemperatureScreen
 import com.csiss.inventory.ui.theme.CSISSTheme
+import com.csiss.inventory.ui.components.FluentuiSystemIconsBox
+import com.csiss.inventory.ui.components.FluentuiSystemIconsTemperature
+import com.csiss.inventory.ui.components.FluentuiSystemIconsAlert
+import com.csiss.inventory.ui.components.FluentuiSystemIconsPerson
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -113,20 +117,31 @@ class MainActivity : ComponentActivity() {
                                 NavigationBarItem(
                                     selected = selectedTab == 0,
                                     onClick = { selectedTab = 0 },
-                                    icon = { Text("📦") },
+                                    icon = {
+                                        Icon(
+                                            imageVector = FluentuiSystemIconsBox,
+                                            contentDescription = null
+                                        )
+                                    },
                                     label = { Text("Stock") }
                                 )
                                 NavigationBarItem(
                                     selected = selectedTab == 1,
                                     onClick = { selectedTab = 1 },
-                                    icon = { Text("🌡️") },
+                                    icon = {
+                                        Icon(
+                                            imageVector = FluentuiSystemIconsTemperature,
+                                            contentDescription = null
+                                        )
+                                    },
                                     label = { Text("Temperature") }
                                 )
                                 NavigationBarItem(
                                     selected = selectedTab == 2,
                                     onClick = {
                                         alertsFilter = 0
-                                        selectedTab = 2 },
+                                        selectedTab = 2
+                                    },
                                     icon = {
                                         BadgedBox(
                                             badge = {
@@ -140,7 +155,10 @@ class MainActivity : ComponentActivity() {
                                                 }
                                             }
                                         ) {
-                                            Text("🔔")
+                                            Icon(
+                                                imageVector = FluentuiSystemIconsAlert,
+                                                contentDescription = null
+                                            )
                                         }
                                     },
                                     label = { Text("Alerts") }
@@ -148,10 +166,16 @@ class MainActivity : ComponentActivity() {
                                 NavigationBarItem(
                                     selected = selectedTab == 3,
                                     onClick = { selectedTab = 3 },
-                                    icon = { Text("👤") },
+                                    icon = {
+                                        Icon(
+                                            imageVector = FluentuiSystemIconsPerson,
+                                            contentDescription = null
+                                        )
+                                    },
                                     label = { Text("Profile") }
                                 )
                             }
+
                         }
                     ) { innerPadding ->
                         Box(
