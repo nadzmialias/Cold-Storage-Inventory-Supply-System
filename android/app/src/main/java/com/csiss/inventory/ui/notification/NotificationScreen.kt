@@ -35,6 +35,7 @@ private val NormalGreen = Color(0xFF159C76)
 
 @Composable
 fun NotificationScreen(
+    initialFilter: Int = 0,
     onOpenCountChanged: (Int) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -48,7 +49,7 @@ fun NotificationScreen(
     var refreshTrigger by remember { mutableIntStateOf(0) }
 
     // 0 = Open, 1 = Stock & Expiry, 2 = Temperature, 3 = Done
-    var selectedFilter by remember { mutableIntStateOf(0) }
+    var selectedFilter by remember(initialFilter) { mutableIntStateOf(initialFilter) }
 
     LaunchedEffect(refreshTrigger) {
         loading = true

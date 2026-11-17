@@ -48,6 +48,7 @@ class MainActivity : ComponentActivity() {
 
                     // 0 = Stock, 1 = Temperature, 2 = Alerts, 3 = Profile
                     var selectedTab by remember { mutableIntStateOf(0) }
+                    var alertsFilter by remember { mutableIntStateOf(0) }
                     var openAlerts by remember { mutableStateOf<List<SystemAlertRow>>(emptyList()) }
                     var openAlertCount by remember { mutableIntStateOf(0) }
                     var showStartupAlertPopup by remember { mutableStateOf(false) }
@@ -123,7 +124,9 @@ class MainActivity : ComponentActivity() {
                                 )
                                 NavigationBarItem(
                                     selected = selectedTab == 2,
-                                    onClick = { selectedTab = 2 },
+                                    onClick = {
+                                        alertsFilter = 0
+                                        selectedTab = 2 },
                                     icon = {
                                         BadgedBox(
                                             badge = {
@@ -160,9 +163,14 @@ class MainActivity : ComponentActivity() {
                                 0 -> StockScreen()
                                 1 -> TemperatureScreen(
                                     useDemoData = false,
-                                    canEditLimits = currentUser.role == "ADMIN"
+                                    canEditLimits = currentUser.role == "ADMIN",
+                                    onOpenAlerts = {
+                                        alertsFilter = 2
+                                        selectedTab = 2
+                                    }
                                 )
                                 2 -> NotificationScreen(
+                                    initialFilter = alertsFilter,
                                     onOpenCountChanged = { newCount ->
                                         openAlertCount = newCount
                                     }
