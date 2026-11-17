@@ -213,8 +213,8 @@ fun NotificationScreen(
                                 runCatching {
                                     repository.resolveAlert(alert.alertId, alert.acknowledgedAt)
                                     refreshTrigger++
-                                }.onFailure { e ->
-                                    error = e.message ?: "Failed to resolve alert."
+                                }.onFailure {
+                                    error = "Unable to resolve alert. Please try again."
                                 }
                             }
                         }
@@ -378,8 +378,15 @@ private fun AlertCard(
                             Text("Acknowledge", color = WarningOrange, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
-                    TextButton(onClick = onResolve) {
-                        Text("Mark Resolved ✓", color = NormalGreen, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    if (alert.isAcknowledged || !alert.isTempRelated) {
+                        TextButton(onClick = onResolve) {
+                            Text(
+                                "Mark Resolved ✓",
+                                color = NormalGreen,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 }
             }
