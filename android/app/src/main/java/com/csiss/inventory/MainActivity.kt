@@ -26,6 +26,7 @@ import com.csiss.inventory.data.SystemAlertRow
 import com.csiss.inventory.ui.auth.CsissAuthGate
 import com.csiss.inventory.ui.notification.AlertNotificationHelper
 import com.csiss.inventory.ui.notification.NotificationScreen
+import com.csiss.inventory.ui.profile.ProfileScreen
 import com.csiss.inventory.ui.stock.StockScreen
 import com.csiss.inventory.ui.temperature.TemperatureScreen
 import com.csiss.inventory.ui.theme.CSISSTheme
@@ -45,7 +46,7 @@ class MainActivity : ComponentActivity() {
                     val context = LocalContext.current
                     val alertRepository = remember { AlertRepository() }
 
-                    // 0 = Stock, 1 = Temperature, 2 = Alerts
+                    // 0 = Stock, 1 = Temperature, 2 = Alerts, 3 = Profile
                     var selectedTab by remember { mutableIntStateOf(0) }
                     var openAlerts by remember { mutableStateOf<List<SystemAlertRow>>(emptyList()) }
                     var openAlertCount by remember { mutableIntStateOf(0) }
@@ -85,27 +86,23 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier
                             .fillMaxSize()
                             .statusBarsPadding(),
+
                         topBar = {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                            Surface(
+                                color = Color.White
                             ) {
-                                Column {
-                                    Text(
-                                        text = currentUser.fullName
-                                    )
-                                    Text(
-                                        text = currentUser.role
-                                    )
-                                }
-                                TextButton(
-                                    onClick = onLogout
-                                ) {
-                                    Text("Logout")
-                                }
+                                Text(
+                                    text = "CSISS",
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(
+                                            horizontal = 20.dp,
+                                            vertical = 14.dp
+                                        ),
+                                    color = Color(0xFF132945),
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         },
                         bottomBar = {
@@ -145,6 +142,12 @@ class MainActivity : ComponentActivity() {
                                     },
                                     label = { Text("Alerts") }
                                 )
+                                NavigationBarItem(
+                                    selected = selectedTab == 3,
+                                    onClick = { selectedTab = 3 },
+                                    icon = { Text("👤") },
+                                    label = { Text("Profile") }
+                                )
                             }
                         }
                     ) { innerPadding ->
@@ -163,6 +166,10 @@ class MainActivity : ComponentActivity() {
                                     onOpenCountChanged = { newCount ->
                                         openAlertCount = newCount
                                     }
+                                )
+                                3 -> ProfileScreen(
+                                    user = currentUser,
+                                    onLogout = onLogout
                                 )
                             }
                         }
