@@ -57,7 +57,8 @@ private val NormalGreen = Color(0xFF159C76)
 @Composable
 fun TemperatureScreen(
     useDemoData: Boolean = true,
-    canEditLimits: Boolean = useDemoData
+    canEditLimits: Boolean = useDemoData,
+    onOpenAlerts: () -> Unit = {}
 ) {
     val repository = remember { TemperatureRepository() }
 
@@ -252,7 +253,7 @@ fun TemperatureScreen(
                         alertCount = data.alerts.count { alert ->
                             alert.status == "OPEN" || alert.status == "ACKNOWLEDGED"
                         },
-                        onClick = { showAlertsPage = true }
+                        onClick = onOpenAlerts
                     )
                 }
             }
