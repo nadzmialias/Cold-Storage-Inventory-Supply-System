@@ -6,6 +6,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,6 +36,7 @@ private val AlertRed = Color(0xFFE45465)
 private val WarningOrange = Color(0xFFE59A23)
 private val NormalGreen = Color(0xFF159C76)
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationScreen(
     initialFilter: Int = 0,
@@ -47,7 +51,13 @@ fun NotificationScreen(
     var manualRefreshPending by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var refreshTrigger by remember { mutableIntStateOf(0) }
-
+    val pullToRefreshState = rememberPullToRefreshState()
+    val requestRefresh: () -> Unit = {
+        if (!loading && !manualRefreshPending) {
+            manualRefreshPending = true
+            refreshTrigger++
+        }
+    }
     // 0 = Open, 1 = Stock & Expiry, 2 = Temperature, 3 = Done
     var selectedFilter by remember(initialFilter) { mutableIntStateOf(initialFilter) }
 
@@ -77,11 +87,29 @@ fun NotificationScreen(
         }
     }
 
-    Column(
+    PullToRefreshBox(
+        isRefreshing = manualRefreshPending,
+        onRefresh = requestRefresh,
         modifier = Modifier
             .fillMaxSize()
-            .background(Background)
+            .background(Background),
+        state = pullToRefreshState,
+        indicator = {
+            PullToRefreshDefaults.Indicator(
+                modifier = Modifier.align(Alignment.TopCenter),
+                isRefreshing = manualRefreshPending,
+                containerColor = Navy,
+                color = Color.White,
+                state = pullToRefreshState
+            )
+        }
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Background)
+        ) {
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -108,15 +136,12 @@ fun NotificationScreen(
                         fontWeight = FontWeight.SemiBold
                     )
                 }
-
                 OutlineRefreshButton(
-                    onClick = {
-                        manualRefreshPending = true
-                        refreshTrigger++
-                    },
+                    onClick = requestRefresh,
                     isRefreshing = manualRefreshPending,
                     enabled = !loading
                 )
+
             }
 
             AlertSummaryHero(alerts = alerts)
@@ -174,56 +199,80 @@ fun NotificationScreen(
             )
         }
 
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            if (filteredAlerts.isEmpty() && !loading) {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = Color.White)
-                    ) {
-                        Text(
-                            text = "No notifications in this category.",
-                            color = TextMuted,
-                            modifier = Modifier.padding(20.dp)
+
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = PaddingValues(
+                    horizontal = 20.dp,
+                    vertical = 8.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (filteredAlerts.isEmpty() && !loading) {
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = Color.White
+                            )
+                        ) {
+                            Text(
+                                text = "No notifications in this category.",
+                                color = TextMuted,
+                                modifier = Modifier.padding(20.dp)
+                            )
+                        }
+                    }
+                } else {
+                    items(
+                        filteredAlerts,
+                        key = { it.alertId }
+                    ) { alert ->
+                        AlertCard(
+                            alert = alert,
+
+                            onAcknowledge = {
+                                scope.launch {
+                                    runCatching {
+                                        repository.acknowledgeAlert(
+                                            alert.alertId
+                                        )
+                                        refreshTrigger++
+                                    }.onFailure { e ->
+                                        error = e.message
+                                            ?: "Failed to acknowledge alert."
+                                    }
+                                }
+                            },
+
+                            onResolve = {
+                                scope.launch {
+                                    runCatching {
+                                        repository.resolveAlert(
+                                            alert.alertId,
+                                            alert.acknowledgedAt
+                                        )
+                                        refreshTrigger++
+                                    }.onFailure {
+                                        error = "Unable to resolve alert. Please try again."
+                                    }
+                                }
+                            }
                         )
                     }
                 }
-            } else {
-                items(filteredAlerts, key = { it.alertId }) { alert ->
-                    AlertCard(
-                        alert = alert,
-                        onAcknowledge = {
-                            scope.launch {
-                                runCatching {
-                                    repository.acknowledgeAlert(alert.alertId)
-                                    refreshTrigger++
-                                }.onFailure { e ->
-                                    error = e.message ?: "Failed to acknowledge alert."
-                                }
-                            }
-                        },
-                        onResolve = {
-                            scope.launch {
-                                runCatching {
-                                    repository.resolveAlert(alert.alertId, alert.acknowledgedAt)
-                                    refreshTrigger++
-                                }.onFailure {
-                                    error = "Unable to resolve alert. Please try again."
-                                }
-                            }
-                        }
-                    )
-                }
-            }
-        }
-    }
-}
+            } // End LazyColumn
+
+        } // End main Column
+
+    } // End outer PullToRefreshBox
+
+} // End NotificationScreen
+
+
 
 @Composable
 private fun AlertSummaryHero(alerts: List<SystemAlertRow>) {

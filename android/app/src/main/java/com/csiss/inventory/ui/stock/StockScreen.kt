@@ -7,6 +7,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,6 +37,7 @@ private val AlertRed = Color(0xFFE45465)
 private val WarningOrange = Color(0xFFE59A23)
 private val NormalGreen = Color(0xFF159C76)
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StockScreen() {
     val repository = remember { StockRepository() }
@@ -43,10 +47,17 @@ fun StockScreen() {
     var manualRefreshPending by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var refreshTrigger by remember { mutableIntStateOf(0) }
-
+    val pullToRefreshState = rememberPullToRefreshState()
+    val requestRefresh: () -> Unit = {
+        if (!loading && !manualRefreshPending) {
+            manualRefreshPending = true
+            refreshTrigger++
+        }
+    }
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = Active Batches, 1 = History
     var showStockInDialog by remember { mutableStateOf(false) }
     var batchForStockOut by remember { mutableStateOf<EnrichedBatch?>(null) }
+
 
     LaunchedEffect(refreshTrigger) {
         loading = true
@@ -61,11 +72,30 @@ fun StockScreen() {
         }
     }
 
-    Column(
+
+    PullToRefreshBox(
+        isRefreshing = manualRefreshPending,
+        onRefresh = requestRefresh,
         modifier = Modifier
             .fillMaxSize()
-            .background(Background)
+            .background(Background),
+        state = pullToRefreshState,
+        indicator = {
+            PullToRefreshDefaults.Indicator(
+                modifier = Modifier.align(Alignment.TopCenter),
+                isRefreshing = manualRefreshPending,
+                containerColor = Navy,
+                color = Color.White,
+                state = pullToRefreshState
+            )
+        }
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Background)
+        ) {
+
         // Header
         Column(
             modifier = Modifier
@@ -93,15 +123,12 @@ fun StockScreen() {
                         fontWeight = FontWeight.SemiBold
                     )
                 }
-
                 OutlineRefreshButton(
-                    onClick = {
-                        manualRefreshPending = true
-                        refreshTrigger++
-                    },
+                    onClick = requestRefresh,
                     isRefreshing = manualRefreshPending,
                     enabled = !loading
                 )
+
             }
 
             // Summary Hero Card
@@ -215,7 +242,9 @@ fun StockScreen() {
                 }
             }
         }
+        }
     }
+
 
     // Stock In Dialog
     if (showStockInDialog && snapshot != null) {

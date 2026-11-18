@@ -12,6 +12,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +40,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 
+
 // CSISS color palette
 private val Navy = Color(0xFF132945)
 private val IceBlue = Color(0xFF34B9DB)
@@ -46,9 +50,10 @@ private val TextMuted = Color(0xFF718198)
 private val AlertRed = Color(0xFFE45465)
 private val NormalGreen = Color(0xFF159C76)
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TemperatureScreen(
-    useDemoData: Boolean = true,
+    useDemoData: Boolean = false,
     canEditLimits: Boolean = useDemoData,
     onOpenAlerts: () -> Unit = {}
 ) {
@@ -65,6 +70,14 @@ fun TemperatureScreen(
     var limitSaveError by remember { mutableStateOf<String?>(null) }
     var demoMinOverride by remember { mutableStateOf<Double?>(null) }
     var demoMaxOverride by remember { mutableStateOf<Double?>(null) }
+    val pullToRefreshState = rememberPullToRefreshState()
+    val requestRefresh: () -> Unit = {
+        if (!loading && !manualRefreshPending) {
+            manualRefreshPending = true
+            refresh++
+        }
+    }
+
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -124,17 +137,29 @@ fun TemperatureScreen(
         }
     }
 
-    Box(
+    PullToRefreshBox(
+        isRefreshing = manualRefreshPending,
+        onRefresh = requestRefresh,
         modifier = Modifier
             .fillMaxSize()
             .background(Background)
             .windowInsetsPadding(
                 WindowInsets.safeDrawing.only(
-                    WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom
+                    WindowInsetsSides.Horizontal +
+                            WindowInsetsSides.Bottom
                 )
+            ),
+        state = pullToRefreshState,
+        indicator = {
+            PullToRefreshDefaults.Indicator(
+                modifier = Modifier.align(Alignment.TopCenter),
+                isRefreshing = manualRefreshPending,
+                containerColor = Navy,
+                color = Color.White,
+                state = pullToRefreshState
             )
+        }
     ) {
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -168,10 +193,7 @@ fun TemperatureScreen(
 
                 // Stable label and button size, with an animated outline on manual refresh.
                 OutlineRefreshButton(
-                    onClick = {
-                        manualRefreshPending = true
-                        refresh++
-                    },
+                    onClick = requestRefresh,
                     isRefreshing = manualRefreshPending,
                     enabled = !loading
                 )
