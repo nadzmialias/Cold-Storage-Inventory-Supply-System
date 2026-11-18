@@ -1,7 +1,6 @@
 package com.csiss.inventory.ui.temperature
 import com.csiss.inventory.ui.components.OutlineRefreshButton
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -28,7 +27,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.csiss.inventory.data.*
-import com.csiss.inventory.ui.components.OutlineRefreshButton
 import java.time.Duration
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -55,42 +53,18 @@ fun TemperatureScreen(
     onOpenAlerts: () -> Unit = {}
 ) {
     val repository = remember { TemperatureRepository() }
-
-    var snapshot by remember {
-        mutableStateOf<TemperatureSnapshot?>(null)
-    }
+    var snapshot by remember { mutableStateOf<TemperatureSnapshot?>(null) }
     var loading by remember { mutableStateOf(true) }
-    // Only show the button spinner for a user-requested refresh.
     var manualRefreshPending by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var refresh by remember { mutableIntStateOf(0) }
-    var currentTime by remember {
-        mutableStateOf(Instant.now())
-    }
-
+    var currentTime by remember { mutableStateOf(Instant.now()) }
     val scope = rememberCoroutineScope()
-
-    var showLimitEditor by remember {
-        mutableStateOf(false)
-    }
-
-    var savingLimits by remember {
-        mutableStateOf(false)
-    }
-
-    var limitSaveError by remember {
-        mutableStateOf<String?>(null)
-    }
-
-    var demoMinOverride by remember {
-        mutableStateOf<Double?>(null)
-    }
-
-    var demoMaxOverride by remember {
-        mutableStateOf<Double?>(null)
-    }
-
-
+    var showLimitEditor by remember { mutableStateOf(false) }
+    var savingLimits by remember { mutableStateOf(false) }
+    var limitSaveError by remember { mutableStateOf<String?>(null) }
+    var demoMinOverride by remember { mutableStateOf<Double?>(null) }
+    var demoMaxOverride by remember { mutableStateOf<Double?>(null) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -107,7 +81,6 @@ fun TemperatureScreen(
             snapshot = if (useDemoData) {
                 val demo = repository.loadDemo()
 
-                // Keep previously edited temperature limits
                 val savedMin = demoMinOverride
                 val savedMax = demoMaxOverride
 
@@ -123,7 +96,6 @@ fun TemperatureScreen(
                         demo
                     }
                 adjustedDemo
-
             } else {
                 repository.loadLive()
             }
@@ -205,7 +177,6 @@ fun TemperatureScreen(
                 )
             }
 
-            // Put sensor connectivity and alerts together above the live reading.
             snapshot?.let { data ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -240,11 +211,8 @@ fun TemperatureScreen(
             }
 
             snapshot?.let { data ->
-
-                // Main temperature display
                 TemperatureHero(data = data)
 
-                // Minimum and Maximum temperature cards
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)

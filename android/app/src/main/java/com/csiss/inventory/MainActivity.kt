@@ -260,6 +260,7 @@ class MainActivity : ComponentActivity() {
                                 Button(
                                     onClick = {
                                         showStartupAlertPopup = false
+                                        alertsFilter = 0
                                         selectedTab = 2
                                     },
                                     colors = ButtonDefaults.buttonColors(
