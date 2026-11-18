@@ -2,12 +2,6 @@ package com.csiss.inventory.ui.temperature
 import com.csiss.inventory.ui.components.OutlineRefreshButton
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -70,12 +64,6 @@ fun TemperatureScreen(
     var manualRefreshPending by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var refresh by remember { mutableIntStateOf(0) }
-    var showAlertsPage by remember {
-        mutableStateOf(false)
-    }
-    val demoAlertOverrides = remember {
-        mutableStateMapOf<Long, String>()
-    }
     var currentTime by remember {
         mutableStateOf(Instant.now())
     }
@@ -84,14 +72,6 @@ fun TemperatureScreen(
 
     var showLimitEditor by remember {
         mutableStateOf(false)
-    }
-
-    var alertUpdating by remember {
-        mutableStateOf(false)
-    }
-
-    var alertActionError by remember {
-        mutableStateOf<String?>(null)
     }
 
     var savingLimits by remember {
@@ -142,16 +122,7 @@ fun TemperatureScreen(
                     } else {
                         demo
                     }
-
-                // Keep previously changed alert statuses
-                adjustedDemo.copy(
-                    alerts = adjustedDemo.alerts.map { alert ->
-                        alert.copy(
-                            status = demoAlertOverrides[alert.alertId]
-                                ?: alert.status
-                        )
-                    }
-                )
+                adjustedDemo
 
             } else {
                 repository.loadLive()
@@ -179,10 +150,6 @@ fun TemperatureScreen(
                 refresh++
             }
         }
-    }
-
-    BackHandler(enabled = showAlertsPage) {
-        showAlertsPage = false
     }
 
     Box(
@@ -474,143 +441,7 @@ fun TemperatureScreen(
                 )
             }
         }
-
-
-// ========================================
-// ANIMATED TEMPERATURE ALERTS PAGE
-// ========================================
-
-        AnimatedVisibility(
-            visible = showAlertsPage,
-
-            enter = slideInHorizontally(
-                initialOffsetX = { fullWidth ->
-                    fullWidth
-                },
-                animationSpec = tween(
-                    durationMillis = 350
-                )
-            ) + fadeIn(
-                animationSpec = tween(
-                    durationMillis = 300
-                )
-            ),
-
-            exit = slideOutHorizontally(
-                targetOffsetX = { fullWidth ->
-                    fullWidth
-                },
-                animationSpec = tween(
-                    durationMillis = 350
-                )
-            ) + fadeOut(
-                animationSpec = tween(
-                    durationMillis = 250
-                )
-            ),
-
-            modifier = Modifier.fillMaxSize()
-        ) {
-
-
-            TemperatureAlertsScreen(
-                alerts = snapshot?.alerts.orEmpty(),
-                isLoading = loading || alertUpdating,
-                isRefreshing = manualRefreshPending,
-                errorMessage = alertActionError ?: error,
-
-                onBack = {
-                    showAlertsPage = false
-                    alertActionError = null
-                },
-
-                onRefresh = {
-                    alertActionError = null
-                    manualRefreshPending = true
-                    refresh++
-                },
-
-                canChangeStatus = true,
-
-                onStatusChange = { alertId, newStatus ->
-
-                    if (useDemoData) {
-
-                        // Keep existing demo functionality.
-                        snapshot?.let { current ->
-
-                            val oldStatus = current.alerts
-                                .firstOrNull {
-                                    it.alertId == alertId
-                                }?.status
-
-                            val validTransition =
-                                (oldStatus == "OPEN" &&
-                                        newStatus == "ACKNOWLEDGED") ||
-                                        (oldStatus == "ACKNOWLEDGED" &&
-                                                newStatus == "RESOLVED")
-
-                            if (validTransition) {
-                                demoAlertOverrides[alertId] = newStatus
-
-                                snapshot = current.copy(
-                                    alerts = current.alerts.map { alert ->
-                                        if (alert.alertId == alertId) {
-                                            alert.copy(status = newStatus)
-                                        } else {
-                                            alert
-                                        }
-                                    }
-                                )
-                            }
-                        }
-
-                    } else {
-
-                        // Live mode: save to Supabase.
-                        scope.launch {
-                            alertUpdating = true
-                            alertActionError = null
-
-                            try {
-                                val updatedAlert =
-                                    repository.updateAlertStatus(
-                                        alertId = alertId,
-                                        newStatus = newStatus
-                                    )
-
-                                // Update the screen after the database
-                                // confirms a successful change.
-                                snapshot = snapshot?.let { current ->
-                                    current.copy(
-                                        alerts = current.alerts.map { alert ->
-                                            if (alert.alertId == alertId) {
-                                                updatedAlert
-                                            } else {
-                                                alert
-                                            }
-                                        }
-                                    )
-                                }
-
-                            } catch (e: Exception) {
-                                alertActionError =
-                                    "Unable to update alert. " +
-                                            "Check your connection, login " +
-                                            "and permissions."
-
-                            } finally {
-                                alertUpdating = false
-                            }
-                        }
-                    }
-                }
-            )
-
-
-        }
     }
-
 }
 
 // ========================================
