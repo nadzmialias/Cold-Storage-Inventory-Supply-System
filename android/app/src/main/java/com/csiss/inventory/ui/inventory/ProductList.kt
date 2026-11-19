@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.LocalDate
+import com.csiss.inventory.ui.components.OutlineRefreshButton
 
 @Composable
 internal fun ProductList(
@@ -31,8 +32,10 @@ internal fun ProductList(
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
-            horizontal = 20.dp,
-            vertical = 16.dp
+            start = 20.dp,
+            end = 20.dp,
+            top = 12.dp,
+            bottom = 16.dp
         ),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -47,18 +50,13 @@ internal fun ProductList(
                         fontWeight = FontWeight.SemiBold,
                         letterSpacing = 1.sp
                     )
-                    Text("Inventory Management", color = Ink, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Inventory", color = Ink, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
                 }
-                Button(
+                OutlineRefreshButton(
                     onClick = onRefresh,
-                    enabled = !isRefreshing,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Blue, contentColor = White),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
-                ) {
-                    Text("Refresh", fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold)
-                }
+                    isRefreshing = isRefreshing,
+                    enabled = !isRefreshing
+                )
             }
         }
         item {

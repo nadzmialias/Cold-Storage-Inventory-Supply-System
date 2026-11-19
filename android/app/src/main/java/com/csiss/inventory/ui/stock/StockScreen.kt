@@ -96,7 +96,6 @@ fun StockScreen() {
                 .background(Background)
         ) {
 
-        // Header
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -117,7 +116,7 @@ fun StockScreen() {
                         letterSpacing = 1.sp
                     )
                     Text(
-                        text = "Stock Management",
+                        text = "Stock",
                         color = TextDark,
                         fontSize = 26.sp,
                         fontWeight = FontWeight.SemiBold
@@ -139,6 +138,7 @@ fun StockScreen() {
             // Action Buttons Row (Stock In / Stock Out)
             Row(
                 modifier = Modifier.fillMaxWidth(),
+
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Button(
@@ -305,6 +305,7 @@ private fun StockSummaryHero(data: StockSnapshot) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 100.dp)
             .background(
                 brush = Brush.linearGradient(
                     colors = listOf(
@@ -316,7 +317,8 @@ private fun StockSummaryHero(data: StockSnapshot) {
                 shape = RoundedCornerShape(20.dp)
             )
             .padding(18.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         HeroStat(label = "ACTIVE BATCHES", value = "${data.batches.size}", accent = Color.White)
         HeroStat(
@@ -334,7 +336,7 @@ private fun StockSummaryHero(data: StockSnapshot) {
 
 @Composable
 private fun HeroStat(label: String, value: String, accent: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally,  verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Text(
             text = value,
             color = accent,

@@ -130,7 +130,7 @@ fun NotificationScreen(
                         letterSpacing = 1.sp
                     )
                     Text(
-                        text = "System Notifications",
+                        text = "Alerts",
                         color = TextDark,
                         fontSize = 26.sp,
                         fontWeight = FontWeight.SemiBold
@@ -283,6 +283,7 @@ private fun AlertSummaryHero(alerts: List<SystemAlertRow>) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 100.dp)
             .background(
                 brush = Brush.linearGradient(
                     colors = listOf(
@@ -294,7 +295,8 @@ private fun AlertSummaryHero(alerts: List<SystemAlertRow>) {
                 shape = RoundedCornerShape(20.dp)
             )
             .padding(18.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         HeroMetric(
             label = "UNREAD / ACTIVE",
@@ -316,7 +318,7 @@ private fun AlertSummaryHero(alerts: List<SystemAlertRow>) {
 
 @Composable
 private fun HeroMetric(label: String, value: String, accent: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally,  verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Text(
             text = value,
             color = accent,

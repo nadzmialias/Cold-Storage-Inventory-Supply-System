@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.core.view.WindowCompat
 import com.csiss.inventory.data.AlertRepository
@@ -147,7 +148,7 @@ class MainActivity : ComponentActivity() {
                                             contentDescription = null
                                         )
                                     },
-                                    label = { Text("Temperature") }
+                                    label = { Text("Temp") }
                                 )
                                 NavigationBarItem(
                                     selected = selectedTab == 2,
@@ -303,6 +304,17 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+}
+
+
+@Composable
+private fun BottomNavLabel(text: String) {
+    Text(
+        text = text,
+        fontSize = 11.sp,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
+    )
 }
 
 @Composable

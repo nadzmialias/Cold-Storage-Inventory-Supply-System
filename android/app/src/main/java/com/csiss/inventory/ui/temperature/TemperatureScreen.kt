@@ -175,7 +175,7 @@ fun TemperatureScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
                         text = "TEMPERATURE MONITORING",
                         color = TextMuted,
@@ -186,7 +186,7 @@ fun TemperatureScreen(
                     Text(
                         text = "Cold Storage",
                         color = TextDark,
-                        fontSize = 27.sp,
+                        fontSize = 26.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
