@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.core.view.WindowCompat
 import com.csiss.inventory.data.AlertRepository
 import com.csiss.inventory.data.SystemAlertRow
@@ -28,6 +29,7 @@ import com.csiss.inventory.ui.notification.AlertNotificationHelper
 import com.csiss.inventory.ui.notification.NotificationScreen
 import com.csiss.inventory.ui.profile.ProfileScreen
 import com.csiss.inventory.ui.stock.StockScreen
+import com.csiss.inventory.ui.inventory.InventoryScreen
 import com.csiss.inventory.ui.temperature.TemperatureScreen
 import com.csiss.inventory.ui.theme.CSISSTheme
 import com.csiss.inventory.ui.components.FluentuiSystemIconsBox
@@ -51,7 +53,7 @@ class MainActivity : ComponentActivity() {
                     val alertRepository = remember { AlertRepository() }
 
                     // 0 = Stock, 1 = Temperature, 2 = Alerts, 3 = Profile
-                    var selectedTab by remember { mutableIntStateOf(0) }
+                    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
                     var alertsFilter by remember { mutableIntStateOf(0) }
                     var openAlerts by remember { mutableStateOf<List<SystemAlertRow>>(emptyList()) }
                     var openAlertCount by remember { mutableIntStateOf(0) }
@@ -124,6 +126,17 @@ class MainActivity : ComponentActivity() {
                                         )
                                     },
                                     label = { Text("Stock") }
+                                )
+                                NavigationBarItem(
+                                    selected = selectedTab == 4,
+                                    onClick = { selectedTab = 4 },
+                                    icon = {
+                                        Icon(
+                                            imageVector = FluentuiSystemIconsBox,
+                                            contentDescription = null
+                                        )
+                                    },
+                                    label = { Text("Inventory") }
                                 )
                                 NavigationBarItem(
                                     selected = selectedTab == 1,
@@ -202,6 +215,14 @@ class MainActivity : ComponentActivity() {
                                 3 -> ProfileScreen(
                                     user = currentUser,
                                     onLogout = onLogout
+                                )
+                                4 -> InventoryScreen(
+                                    onHome = { selectedTab = 0 },
+                                    onAlerts = {
+                                        alertsFilter = 0
+                                        selectedTab = 2
+                                    },
+                                    onProfile = { selectedTab = 3 }
                                 )
                             }
                         }

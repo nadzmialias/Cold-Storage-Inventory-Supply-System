@@ -14,9 +14,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalInspectionMode
+import com.csiss.inventory.data.CategoryOption
+import com.csiss.inventory.data.UnitOption
+import com.csiss.inventory.data.addInventoryOption
+import com.csiss.inventory.data.loadCategories
+import com.csiss.inventory.data.loadUnits
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import java.time.LocalDate
 import java.util.Locale
 
 @Composable
@@ -68,7 +72,7 @@ internal fun ProductForm(
         if (it != null) photo = it
     }
 
-    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item { ScreenTitle(if (product == null) "Add product" else "Edit product", "Complete the required information.", back) }
         item { Field(name, { name = it }, "Product name *") }
         if (optionsLoading) item { Text("Loading categories and units…") }
@@ -111,7 +115,15 @@ internal fun ProductForm(
                 label = { Text("Description (optional)") },
                 modifier = Modifier.fillMaxWidth(),
                 shape = Shape,
-                minLines = 3
+                minLines = 3,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = White,
+                    unfocusedContainerColor = White,
+                    focusedBorderColor = Blue,
+                    unfocusedBorderColor = Line,
+                    focusedTextColor = Ink,
+                    unfocusedTextColor = Ink
+                )
             )
         }
         item {
@@ -133,7 +145,9 @@ internal fun ProductForm(
                 OutlinedButton(
                     onClick = { photoPicker.launch("image/*") },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = Shape
+                    shape = Shape,
+                    border = BorderStroke(1.dp, Line),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Blue)
                 ) {
                     Text(if (hasPhoto) "Change image" else "Choose image")
                 }

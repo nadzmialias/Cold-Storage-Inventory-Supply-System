@@ -33,14 +33,14 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.ResolverStyle
 
-internal val Ink = Color(0xFF153154)
-internal val Muted = Color(0xFF526A88)
-internal val Blue = Color(0xFF1478ED)
-internal val Background = Color(0xFFF4F8FD)
-internal val Line = Color(0xFFDCE7F4)
+internal val Ink = Color(0xFF182B48)
+internal val Muted = Color(0xFF718198)
+internal val Blue = Color(0xFF132945)
+internal val Background = Color(0xFFF1F6FB)
+internal val Line = Color(0xFFE0E6EF)
 internal val White = Color.White
-internal val Red = Color(0xFFC32D56)
-internal val Shape = RoundedCornerShape(12.dp)
+internal val Red = Color(0xFFE45465)
+internal val Shape = RoundedCornerShape(16.dp)
 internal val DateFormat = DateTimeFormatter.ofPattern("dd/MM/uuuu")
     .withResolverStyle(ResolverStyle.STRICT)
 
@@ -50,21 +50,21 @@ internal fun ProductCard(product: Product, today: LocalDate, onClick: (() -> Uni
     val modifier = Modifier.fillMaxWidth()
     Surface(
         modifier = if (onClick == null) modifier else modifier.clickable(onClick = onClick),
-        shape = Shape, color = White, border = BorderStroke(1.dp, Line)
+        shape = RoundedCornerShape(20.dp), color = White
     ) {
-        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(44.dp).background(Color(0xFFEAF3FE), RoundedCornerShape(8.dp)),
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(56.dp).background(Color(0xFFEAF3FE), RoundedCornerShape(8.dp)),
                 contentAlignment = Alignment.Center) { ProductThumbnail(product.photo, product.imagePath) }
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(product.name, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text(product.name, color = Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 Text(product.category, color = Muted, fontSize = 11.sp)
                 Text("${product.quantity.display()} ${product.unit}", color = Muted, fontSize = 11.sp)
             }
             Text(status.title, color = status.foreground, fontSize = 10.sp,
                 modifier = Modifier.background(status.background, RoundedCornerShape(8.dp))
                     .padding(horizontal = 6.dp, vertical = 4.dp))
-            if (onClick != null) Text(" ›", color = Blue)
+            if (onClick != null) Text(" ›", color = Color(0xFF34B9DB))
         }
     }
 }
@@ -83,11 +83,9 @@ internal fun ProductThumbnail(uri: Uri?, imagePath: String?) {
                             .downloadAuthenticated(imagePath)
                         BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                     }
-
                     uri != null -> resolver.openInputStream(uri)?.use {
                         BitmapFactory.decodeStream(it)
                     }
-
                     else -> null
                 }
             } catch (error: CancellationException) {
@@ -98,7 +96,6 @@ internal fun ProductThumbnail(uri: Uri?, imagePath: String?) {
             }
         }
     }
-
     val image = bitmap
     if (image == null) {
         Text("❄", color = Blue)
@@ -121,18 +118,21 @@ internal fun Field(value: String, onChange: (String) -> Unit, label: String,
         keyboardOptions = KeyboardOptions(keyboardType = keyboard),
         singleLine = true, shape = Shape, modifier = Modifier.fillMaxWidth(),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = White, unfocusedContainerColor = White, unfocusedBorderColor = Line
+            focusedContainerColor = White, unfocusedContainerColor = White,
+            unfocusedBorderColor = Line, focusedBorderColor = Blue,
+            focusedTextColor = Ink, unfocusedTextColor = Ink,
+            focusedLabelColor = Blue, unfocusedLabelColor = Muted
         )
     )
 }
 
 @Composable
 internal fun ScreenTitle(title: String, caption: String, back: () -> Unit) {
-    Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = back) { Text("‹ Back") }
-            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        TextButton(onClick = back, contentPadding = PaddingValues(0.dp)) {
+            Text("‹ Back", color = Blue)
         }
+        Text(title, color = Ink, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Text(caption, color = Muted, fontSize = 12.sp)
     }
 }
@@ -140,12 +140,11 @@ internal fun ScreenTitle(title: String, caption: String, back: () -> Unit) {
 @Composable
 internal fun PrimaryButton(label: String, onClick: () -> Unit) {
     Button(
-        onClick = onClick, shape = Shape, contentPadding = PaddingValues(0.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = White),
-        modifier = Modifier.fillMaxWidth().height(46.dp).background(
-            Brush.horizontalGradient(listOf(Blue, Color(0xFF459DED))), Shape
-        )
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Blue, contentColor = White),
+        modifier = Modifier.fillMaxWidth().height(48.dp)
     ) {
-        Text(label, color = White, fontWeight = FontWeight.SemiBold)
+        Text(label, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
     }
 }
