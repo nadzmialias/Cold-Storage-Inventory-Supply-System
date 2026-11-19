@@ -87,6 +87,7 @@ dependencies {
     implementation(platform(libs.supabase.bom))
     implementation(libs.supabase.auth)
     implementation(libs.supabase.postgrest)
+    implementation("io.github.jan-tennert.supabase:storage-kt")
     implementation(libs.ktor.client.okhttp)
     implementation("androidx.compose.animation:animation")
 }
