@@ -21,6 +21,8 @@ import androidx.compose.ui.unit.sp
 import com.csiss.inventory.data.AlertRepository
 import com.csiss.inventory.data.SystemAlertRow
 import com.csiss.inventory.ui.components.OutlineRefreshButton
+import com.csiss.inventory.ui.components.SummaryStat
+import com.csiss.inventory.ui.components.SummaryStatsCard
 import kotlinx.coroutines.launch
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -272,49 +274,38 @@ fun NotificationScreen(
 
 } // End NotificationScreen
 
-
-
 @Composable
 private fun AlertSummaryHero(alerts: List<SystemAlertRow>) {
-    val openCount = alerts.count { !it.isResolved && !it.isAcknowledged }
+    val openCount = alerts.count {
+        !it.isResolved && !it.isAcknowledged
+    }
     val ackCount = alerts.count { it.isAcknowledged }
     val resolvedCount = alerts.count { it.isResolved }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 100.dp)
-            .background(
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        Color(0xFF141C43),
-                        Color(0xFF373C85),
-                        Color(0xFF6651A7)
-                    )
-                ),
-                shape = RoundedCornerShape(20.dp)
+    SummaryStatsCard(
+        stats = listOf(
+            SummaryStat(
+                "UNREAD / ACTIVE",
+                openCount.toString(),
+                if (openCount > 0)
+                    Color(0xFFFFBEC6)
+                else
+                    Color.White
+            ),
+            SummaryStat(
+                "ACKNOWLEDGED",
+                ackCount.toString(),
+                Color(0xFFFDE68A)
+            ),
+            SummaryStat(
+                "RESOLVED",
+                resolvedCount.toString(),
+                Color(0xFF98F0CD)
             )
-            .padding(18.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        HeroMetric(
-            label = "UNREAD / ACTIVE",
-            value = "$openCount",
-            accent = if (openCount > 0) Color(0xFFFFBEC6) else Color.White
         )
-        HeroMetric(
-            label = "ACKNOWLEDGED",
-            value = "$ackCount",
-            accent = Color(0xFFFDE68A)
-        )
-        HeroMetric(
-            label = "RESOLVED",
-            value = "$resolvedCount",
-            accent = Color(0xFF98F0CD)
-        )
-    }
+    )
 }
+
 
 @Composable
 private fun HeroMetric(label: String, value: String, accent: Color) {

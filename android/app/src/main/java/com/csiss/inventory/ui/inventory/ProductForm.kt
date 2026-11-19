@@ -12,7 +12,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.*
 import androidx.compose.ui.platform.LocalInspectionMode
 import com.csiss.inventory.data.CategoryOption
 import com.csiss.inventory.data.UnitOption
@@ -72,7 +72,7 @@ internal fun ProductForm(
         if (it != null) photo = it
     }
 
-    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item { ScreenTitle(if (product == null) "Add product" else "Edit product", "Complete the required information.", back) }
         item { Field(name, { name = it }, "Product name *") }
         if (optionsLoading) item { Text("Loading categories and units…") }
@@ -171,6 +171,19 @@ internal fun ProductForm(
                 }
             })
         }
+        item {
+            TextButton(
+                onClick = back,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Cancel",
+                    color = Muted,
+                    fontSize = 14.sp
+                )
+            }
+        }
+
     }
     adding?.let { label ->
         AlertDialog(

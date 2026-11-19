@@ -127,24 +127,60 @@ internal fun Field(value: String, onChange: (String) -> Unit, label: String,
 }
 
 @Composable
-internal fun ScreenTitle(title: String, caption: String, back: () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        TextButton(onClick = back, contentPadding = PaddingValues(0.dp)) {
-            Text("‹ Back", color = Blue)
+internal fun ScreenTitle(
+    title: String,
+    caption: String,
+    back: () -> Unit
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        TextButton(
+            onClick = back,
+            contentPadding = PaddingValues(0.dp)
+        ) {
+            Text(
+                text = "‹ Back",
+                color = Blue,
+                fontSize = 14.sp
+            )
         }
-        Text(title, color = Ink, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        Text(caption, color = Muted, fontSize = 12.sp)
+
+        Text(
+            text = title,
+            color = Ink,
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Text(
+            text = caption,
+            color = Muted,
+            fontSize = 12.sp
+        )
     }
 }
 
 @Composable
-internal fun PrimaryButton(label: String, onClick: () -> Unit) {
+internal fun PrimaryButton(
+    label: String,
+    onClick: () -> Unit
+) {
     Button(
         onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = Blue, contentColor = White),
-        modifier = Modifier.fillMaxWidth().height(48.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(50.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Blue,
+            contentColor = White
+        )
     ) {
-        Text(label, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+        Text(
+            text = label,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 }

@@ -16,6 +16,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.LocalDate
 import com.csiss.inventory.ui.components.OutlineRefreshButton
+import com.csiss.inventory.ui.components.SummaryStat
+import com.csiss.inventory.ui.components.SummaryStatsCard
 
 @Composable
 internal fun ProductList(
@@ -40,9 +42,15 @@ internal fun ProductList(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Column(
+                    Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     Text(
                         text = "PRODUCT CATALOGUE",
                         color = Color(0xFF718198),
@@ -50,7 +58,11 @@ internal fun ProductList(
                         fontWeight = FontWeight.SemiBold,
                         letterSpacing = 1.sp
                     )
-                    Text("Inventory", color = Ink, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        text = "Inventory",
+                        color = Ink,
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.SemiBold)
                 }
                 OutlineRefreshButton(
                     onClick = onRefresh,
@@ -59,20 +71,32 @@ internal fun ProductList(
                 )
             }
         }
+
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth()
-                    .background(
-                        Brush.linearGradient(listOf(Color(0xFF141C43), Color(0xFF373C85), Color(0xFF6651A7))),
-                        RoundedCornerShape(20.dp)
-                    ).padding(horizontal = 8.dp, vertical = 20.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Summary("TOTAL ITEMS", products.size, White, Modifier.weight(1f))
-                Summary("LOW STOCK", products.count { it.quantity <= it.minimum }, Color(0xFFFFB7C5), Modifier.weight(1f))
-                Summary("EXPIRING SOON", products.count { it.status(today) == StockStatus.Near }, Color(0xFF9BE8CA), Modifier.weight(1f))
-            }
+            SummaryStatsCard(
+                stats = listOf(
+                    SummaryStat(
+                        "TOTAL ITEMS",
+                        products.size.toString()
+                    ),
+                    SummaryStat(
+                        "LOW STOCK",
+                        products.count {
+                            it.quantity <= it.minimum
+                        }.toString(),
+                        Color(0xFFFFB7C5)
+                    ),
+                    SummaryStat(
+                        "EXPIRING SOON",
+                        products.count {
+                            it.status(today) == StockStatus.Near
+                        }.toString(),
+                        Color(0xFF9BE8CA)
+                    )
+                )
+            )
         }
+
         item { Field(search, onSearch, "Search product…") }
         item { PrimaryButton("+ Add New Item", onAdd) }
         if (isRefreshing) item {

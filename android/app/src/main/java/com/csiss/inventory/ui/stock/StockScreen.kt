@@ -21,6 +21,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.csiss.inventory.data.*
 import com.csiss.inventory.ui.components.OutlineRefreshButton
+import com.csiss.inventory.ui.components.SummaryStat
+import com.csiss.inventory.ui.components.SummaryStatsCard
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.OffsetDateTime
@@ -297,60 +299,36 @@ fun StockScreen() {
 // UI SUB-COMPONENTS
 // ========================================
 
+
 @Composable
 private fun StockSummaryHero(data: StockSnapshot) {
     val lowStockCount = data.batches.count { it.isLowStock }
     val expiringCount = data.batches.count { it.isExpiringSoon }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 100.dp)
-            .background(
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        Color(0xFF141C43),
-                        Color(0xFF373C85),
-                        Color(0xFF6651A7)
-                    )
-                ),
-                shape = RoundedCornerShape(20.dp)
+    SummaryStatsCard(
+        stats = listOf(
+            SummaryStat(
+                "ACTIVE BATCHES",
+                data.batches.size.toString()
+            ),
+            SummaryStat(
+                "LOW STOCK",
+                lowStockCount.toString(),
+                if (lowStockCount > 0)
+                    Color(0xFFFFBEC6)
+                else
+                    Color(0xFF98F0CD)
+            ),
+            SummaryStat(
+                "EXPIRING ≤7D",
+                expiringCount.toString(),
+                if (expiringCount > 0)
+                    Color(0xFFFDE68A)
+                else
+                    Color(0xFF98F0CD)
             )
-            .padding(18.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        HeroStat(label = "ACTIVE BATCHES", value = "${data.batches.size}", accent = Color.White)
-        HeroStat(
-            label = "LOW STOCK",
-            value = "$lowStockCount",
-            accent = if (lowStockCount > 0) Color(0xFFFFBEC6) else Color(0xFF98F0CD)
         )
-        HeroStat(
-            label = "EXPIRING ≤7D",
-            value = "$expiringCount",
-            accent = if (expiringCount > 0) Color(0xFFFDE68A) else Color(0xFF98F0CD)
-        )
-    }
-}
-
-@Composable
-private fun HeroStat(label: String, value: String, accent: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally,  verticalArrangement = Arrangement.spacedBy(7.dp)) {
-        Text(
-            text = value,
-            color = accent,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = label,
-            color = Color(0xFFD2DBED),
-            fontSize = 9.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 0.6.sp
-        )
-    }
+    )
 }
 
 @Composable

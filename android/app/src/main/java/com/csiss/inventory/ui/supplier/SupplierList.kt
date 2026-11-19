@@ -14,6 +14,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.csiss.inventory.ui.components.OutlineRefreshButton
+import com.csiss.inventory.ui.components.SummaryStat
+import com.csiss.inventory.ui.components.SummaryStatsCard
 
 @Composable
 internal fun SupplierList(
@@ -45,8 +48,10 @@ internal fun SupplierList(
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
-            horizontal = 20.dp,
-            vertical = 16.dp
+            start = 20.dp,
+            end = 20.dp,
+            top = 12.dp,
+            bottom = 16.dp
         ),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -69,57 +74,33 @@ internal fun SupplierList(
                         letterSpacing = 1.sp
                     )
                     Text(
-                        text = "Supplier Management",
+                        text = "Supplier",
                         color = Ink,
-                        fontSize = 24.sp,
+                        fontSize = 26.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
 
-                Button(
+                OutlineRefreshButton(
                     onClick = onRefresh,
-                    enabled = !isRefreshing,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Blue,
-                        contentColor = White
-                    ),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = "Refresh",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
+                    isRefreshing = isRefreshing,
+                    enabled = !isRefreshing
+                )
+
             }
         }
 
         // Stats Card (always full numbers)
         item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        Brush.linearGradient(
-                            listOf(
-                                Color(0xFF312E81),
-                                Color(0xFF4C1D95),
-                                Color(0xFF6D28D9)
-                            )
-                        ),
-                        RoundedCornerShape(20.dp)
-                    )
-                    .padding(horizontal = 8.dp, vertical = 20.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                SupplierSummary("TOTAL SUPPLIERS", totalCount, White, Modifier.weight(1f))
-                VerticalDivider()
-                SupplierSummary("ACTIVE", activeCount, White, Modifier.weight(1f))
-                VerticalDivider()
-                SupplierSummary("INACTIVE", inactiveCount, White, Modifier.weight(1f))
-            }
+            SummaryStatsCard(
+                stats = listOf(
+                    SummaryStat("TOTAL SUPPLIERS", totalCount.toString()),
+                    SummaryStat("ACTIVE", activeCount.toString()),
+                    SummaryStat("INACTIVE", inactiveCount.toString())
+                )
+            )
         }
+
 
         // Search Bar
         item {
