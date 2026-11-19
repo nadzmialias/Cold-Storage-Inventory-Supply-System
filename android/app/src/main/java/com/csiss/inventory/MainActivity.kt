@@ -31,12 +31,14 @@ import com.csiss.inventory.ui.notification.NotificationScreen
 import com.csiss.inventory.ui.profile.ProfileScreen
 import com.csiss.inventory.ui.stock.StockScreen
 import com.csiss.inventory.ui.inventory.InventoryScreen
+import com.csiss.inventory.ui.supplier.SupplierScreen
 import com.csiss.inventory.ui.temperature.TemperatureScreen
 import com.csiss.inventory.ui.theme.CSISSTheme
 import com.csiss.inventory.ui.components.FluentuiSystemIconsBox
 import com.csiss.inventory.ui.components.FluentuiSystemIconsTemperature
 import com.csiss.inventory.ui.components.FluentuiSystemIconsAlert
 import com.csiss.inventory.ui.components.FluentuiSystemIconsPerson
+import com.csiss.inventory.ui.components.FluentuiSystemIconsSupplier
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -140,6 +142,17 @@ class MainActivity : ComponentActivity() {
                                     label = { Text("Inventory") }
                                 )
                                 NavigationBarItem(
+                                    selected = selectedTab == 5,
+                                    onClick = { selectedTab = 5 },
+                                    icon = {
+                                        Icon(
+                                            imageVector = FluentuiSystemIconsSupplier,
+                                            contentDescription = "Supplier"
+                                        )
+                                    },
+                                    label = { Text("Supplier") }
+                                )
+                                NavigationBarItem(
                                     selected = selectedTab == 1,
                                     onClick = { selectedTab = 1 },
                                     icon = {
@@ -218,6 +231,14 @@ class MainActivity : ComponentActivity() {
                                     onLogout = onLogout
                                 )
                                 4 -> InventoryScreen(
+                                    onHome = { selectedTab = 0 },
+                                    onAlerts = {
+                                        alertsFilter = 0
+                                        selectedTab = 2
+                                    },
+                                    onProfile = { selectedTab = 3 }
+                                )
+                                5 -> SupplierScreen(
                                     onHome = { selectedTab = 0 },
                                     onAlerts = {
                                         alertsFilter = 0
