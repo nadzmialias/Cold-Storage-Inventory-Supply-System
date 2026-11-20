@@ -21,6 +21,11 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.core.view.WindowCompat
 import com.csiss.inventory.data.AlertRepository
@@ -55,14 +60,20 @@ class MainActivity : ComponentActivity() {
                     val context = LocalContext.current
                     val alertRepository = remember { AlertRepository() }
 
-                    // 0 = Stock, 1 = Temperature, 2 = Alerts, 3 = Profile
+                    // 0 = Stock, 1 = Temperature, 2 = Alerts, 3 = Profile,  3 = Profile, 4 = Inventory, 5 = Supplier
                     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
                     var alertsFilter by remember { mutableIntStateOf(0) }
                     var openAlerts by remember { mutableStateOf<List<SystemAlertRow>>(emptyList()) }
                     var openAlertCount by remember { mutableIntStateOf(0) }
                     var showStartupAlertPopup by remember { mutableStateOf(false) }
-                    var hasShownPopupForSession by remember(currentUser.fullName) { mutableStateOf(false) }
-
+                    var hasShownPopupForSession by remember(currentUser.fullName) {
+                        mutableStateOf(
+                            false
+                        )
+                    }
+                    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+                    val drawerScope = rememberCoroutineScope()
+                    var showDrawerLogoutDialog by remember { mutableStateOf(false) }
                     // Request Android 13+ notification permission for system pop-up banners
                     val permissionLauncher = rememberLauncherForActivityResult(
                         contract = ActivityResultContracts.RequestPermission()
@@ -92,163 +103,211 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    Scaffold(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .statusBarsPadding(),
-
-                        topBar = {
-                            Surface(
-                                color = Color.White
-                            ) {
-                                Text(
-                                    text = "CSISS",
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(
-                                            horizontal = 20.dp,
-                                            vertical = 14.dp
-                                        ),
-                                    color = Color(0xFF132945),
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        },
-                        bottomBar = {
-                            NavigationBar(
-                                containerColor = Color.White
-                            ) {
-                                NavigationBarItem(
-                                    selected = selectedTab == 0,
-                                    onClick = { selectedTab = 0 },
-                                    icon = {
-                                        Icon(
-                                            imageVector = FluentuiSystemIconsBox,
-                                            contentDescription = null
-                                        )
-                                    },
-                                    label = { Text("Stock") }
-                                )
-                                NavigationBarItem(
-                                    selected = selectedTab == 4,
-                                    onClick = { selectedTab = 4 },
-                                    icon = {
-                                        Icon(
-                                            imageVector = FluentuiSystemIconsBox,
-                                            contentDescription = null
-                                        )
-                                    },
-                                    label = { Text("Inventory") }
-                                )
-                                NavigationBarItem(
-                                    selected = selectedTab == 5,
-                                    onClick = { selectedTab = 5 },
-                                    icon = {
-                                        Icon(
-                                            imageVector = FluentuiSystemIconsSupplier,
-                                            contentDescription = "Supplier"
-                                        )
-                                    },
-                                    label = { Text("Supplier") }
-                                )
-                                NavigationBarItem(
-                                    selected = selectedTab == 1,
-                                    onClick = { selectedTab = 1 },
-                                    icon = {
-                                        Icon(
-                                            imageVector = FluentuiSystemIconsTemperature,
-                                            contentDescription = null
-                                        )
-                                    },
-                                    label = { Text("Temp") }
-                                )
-                                NavigationBarItem(
-                                    selected = selectedTab == 2,
-                                    onClick = {
-                                        alertsFilter = 0
-                                        selectedTab = 2
-                                    },
-                                    icon = {
-                                        BadgedBox(
-                                            badge = {
-                                                if (openAlertCount > 0) {
-                                                    Badge(
-                                                        containerColor = Color(0xFFE45465),
-                                                        contentColor = Color.White
-                                                    ) {
-                                                        Text("$openAlertCount")
-                                                    }
-                                                }
-                                            }
-                                        ) {
-                                            Icon(
-                                                imageVector = FluentuiSystemIconsAlert,
-                                                contentDescription = null
-                                            )
-                                        }
-                                    },
-                                    label = { Text("Alerts") }
-                                )
-                                NavigationBarItem(
-                                    selected = selectedTab == 3,
-                                    onClick = { selectedTab = 3 },
-                                    icon = {
-                                        Icon(
-                                            imageVector = FluentuiSystemIconsPerson,
-                                            contentDescription = null
-                                        )
-                                    },
-                                    label = { Text("Profile") }
-                                )
-                            }
-
+                    ModalNavigationDrawer(
+                        drawerState = drawerState,
+                        drawerContent = {
+                            CompactManagementDrawer(
+                                userName = currentUser.fullName,
+                                role = currentUser.role,
+                                supplierSelected = selectedTab == 5,
+                                profileSelected = selectedTab == 3,
+                                onSupplierClick = {
+                                    drawerScope.launch {
+                                        drawerState.close()
+                                        selectedTab = 5
+                                    }
+                                },
+                                onProfileClick = {
+                                    drawerScope.launch {
+                                        drawerState.close()
+                                        selectedTab = 3
+                                    }
+                                },
+                                onLogoutClick = {
+                                    drawerScope.launch {
+                                        drawerState.close()
+                                        showDrawerLogoutDialog = true
+                                    }
+                                }
+                            )
                         }
-                    ) { innerPadding ->
-                        Box(
+                    ) {
+                        Scaffold(
+
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(innerPadding)
-                        ) {
-                            when (selectedTab) {
-                                0 -> StockScreen()
-                                1 -> TemperatureScreen(
-                                    useDemoData = false,
-                                    canEditLimits = currentUser.role == "ADMIN",
-                                    onOpenAlerts = {
-                                        alertsFilter = 2
-                                        selectedTab = 2
+                                .statusBarsPadding(),
+
+                            topBar = {
+                                Surface(color = Color.White) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(start = 20.dp, end = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = "CSISS",
+                                            modifier = Modifier.padding(vertical = 14.dp),
+                                            color = Color(0xFF132945),
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        IconButton(
+                                            onClick = {
+                                                drawerScope.launch {
+                                                    drawerState.open()
+                                                }
+                                            },
+                                            modifier = Modifier.semantics {
+                                                contentDescription = "Open navigation menu"
+                                            }
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.width(22.dp),
+                                                verticalArrangement = Arrangement.spacedBy(5.dp)
+                                            ) {
+                                                repeat(3) {
+                                                    HorizontalDivider(
+                                                        thickness = 2.dp,
+                                                        color = Color(0xFF132945)
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
-                                )
-                                2 -> NotificationScreen(
-                                    initialFilter = alertsFilter,
-                                    onOpenCountChanged = { newCount ->
-                                        openAlertCount = newCount
-                                    }
-                                )
-                                3 -> ProfileScreen(
-                                    user = currentUser,
-                                    onLogout = onLogout
-                                )
-                                4 -> InventoryScreen(
-                                    onHome = { selectedTab = 0 },
-                                    onAlerts = {
-                                        alertsFilter = 0
-                                        selectedTab = 2
-                                    },
-                                    onProfile = { selectedTab = 3 }
-                                )
-                                5 -> SupplierScreen(
-                                    onHome = { selectedTab = 0 },
-                                    onAlerts = {
-                                        alertsFilter = 0
-                                        selectedTab = 2
-                                    },
-                                    onProfile = { selectedTab = 3 }
-                                )
+                                }
+                            },
+                            bottomBar = {
+                                NavigationBar(
+                                    containerColor = Color.White
+                                ) {
+                                    NavigationBarItem(
+                                        selected = selectedTab == 0,
+                                        onClick = { selectedTab = 0 },
+                                        icon = {
+                                            Icon(
+                                                imageVector = FluentuiSystemIconsBox,
+                                                contentDescription = null
+                                            )
+                                        },
+                                        label = { BottomNavLabel("Stock") }
+                                    )
+                                    NavigationBarItem(
+                                        selected = selectedTab == 4,
+                                        onClick = { selectedTab = 4 },
+                                        icon = {
+                                            Icon(
+                                                imageVector = FluentuiSystemIconsBox,
+                                                contentDescription = null
+                                            )
+                                        },
+                                        label = { BottomNavLabel("Inventory") }
+                                    )
+                                    NavigationBarItem(
+                                        selected = selectedTab == 1,
+                                        onClick = { selectedTab = 1 },
+                                        icon = {
+                                            Icon(
+                                                imageVector = FluentuiSystemIconsTemperature,
+                                                contentDescription = null
+                                            )
+                                        },
+                                        label = { BottomNavLabel("Temp") }
+                                    )
+                                    NavigationBarItem(
+                                        selected = selectedTab == 2,
+                                        onClick = {
+                                            alertsFilter = 0
+                                            selectedTab = 2
+                                        },
+                                        icon = {
+                                            BadgedBox(
+                                                badge = {
+                                                    if (openAlertCount > 0) {
+                                                        Badge(
+                                                            containerColor = Color(0xFFE45465),
+                                                            contentColor = Color.White
+                                                        ) {
+                                                            Text("$openAlertCount")
+                                                        }
+                                                    }
+                                                }
+                                            ) {
+                                                Icon(
+                                                    imageVector = FluentuiSystemIconsAlert,
+                                                    contentDescription = null
+                                                )
+                                            }
+                                        },
+                                        label = { BottomNavLabel("Alerts") }
+                                    )
+                                    NavigationBarItem(
+                                        selected = selectedTab == 3,
+                                        onClick = { selectedTab = 3 },
+                                        icon = {
+                                            Icon(
+                                                imageVector = FluentuiSystemIconsPerson,
+                                                contentDescription = null
+                                            )
+                                        },
+                                        label = { BottomNavLabel("Profile") }
+                                    )
+                                }
+
                             }
-                        }
-                    }
+                        ) { innerPadding ->
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(innerPadding)
+                            ) {
+                                when (selectedTab) {
+                                    0 -> StockScreen()
+                                    1 -> TemperatureScreen(
+                                        useDemoData = false,
+                                        canEditLimits = currentUser.role == "ADMIN",
+                                        onOpenAlerts = {
+                                            alertsFilter = 2
+                                            selectedTab = 2
+                                        }
+                                    )
+
+                                    2 -> NotificationScreen(
+                                        initialFilter = alertsFilter,
+                                        onOpenCountChanged = { newCount ->
+                                            openAlertCount = newCount
+                                        }
+                                    )
+
+                                    3 -> ProfileScreen(
+                                        user = currentUser,
+                                        onLogout = onLogout
+                                    )
+
+                                    4 -> InventoryScreen(
+                                        onHome = { selectedTab = 0 },
+                                        onAlerts = {
+                                            alertsFilter = 0
+                                            selectedTab = 2
+                                        },
+                                        onProfile = { selectedTab = 3 }
+                                    )
+
+                                    5 -> SupplierScreen(
+                                        onHome = { selectedTab = 0 },
+                                        onAlerts = {
+                                            alertsFilter = 0
+                                            selectedTab = 2
+                                        },
+                                        onProfile = { selectedTab = 3 }
+                                    )
+                                }
+                            }
+                        } // End Scaffold
+                    } // End ModalNavigationDrawer
+
 
                     // Urgent Pop-Up Alert Dialog for Staff & Admin
                     if (showStartupAlertPopup && openAlerts.isNotEmpty()) {
@@ -321,6 +380,45 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     }
+
+
+                    if (showDrawerLogoutDialog) {
+                        AlertDialog(
+                            onDismissRequest = {
+                                showDrawerLogoutDialog = false
+                            },
+                            title = {
+                                Text("Log out?")
+                            },
+                            text = {
+                                Text("Do you want to end your CSISS session?")
+                            },
+                            confirmButton = {
+                                TextButton(
+                                    onClick = {
+                                        showDrawerLogoutDialog = false
+                                        onLogout()
+                                    }
+                                ) {
+                                    Text(
+                                        text = "Log out",
+                                        color = Color(0xFFE45465)
+                                    )
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(
+                                    onClick = {
+                                        showDrawerLogoutDialog = false
+                                    }
+                                ) {
+                                    Text("Cancel")
+                                }
+                            }
+                        )
+                    }
+
+
                 }
             }
         }
@@ -337,6 +435,195 @@ private fun BottomNavLabel(text: String) {
         overflow = TextOverflow.Ellipsis
     )
 }
+
+
+@Composable
+private fun CompactManagementDrawer(
+    userName: String,
+    role: String,
+    supplierSelected: Boolean,
+    profileSelected: Boolean,
+    onSupplierClick: () -> Unit,
+    onProfileClick: () -> Unit,
+    onLogoutClick: () -> Unit
+) {
+    val navy = Color(0xFF132945)
+    val muted = Color(0xFF718198)
+
+    ModalDrawerSheet(
+        modifier = Modifier.widthIn(max = 320.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "CSISS",
+                color = navy,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            Surface(
+                color = Color(0xFFF1F6FB),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = userName,
+                        color = navy,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    Text(
+                        text = if (role == "ADMIN")
+                            "Administrator"
+                        else
+                            "Staff",
+                        color = muted,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            HorizontalDivider()
+
+            Text(
+                text = "MANAGEMENT",
+                color = muted,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 1.sp,
+                modifier = Modifier.padding(top = 12.dp)
+            )
+
+            NavigationDrawerItem(
+                label = {
+                    Text("Supplier Management")
+                },
+                selected = supplierSelected,
+                onClick = onSupplierClick,
+                icon = {
+                    Icon(
+                        imageVector = FluentuiSystemIconsSupplier,
+                        contentDescription = null
+                    )
+                },
+                colors = NavigationDrawerItemDefaults.colors(
+                    selectedContainerColor = Color(0xFFE9DFF7),
+                    selectedTextColor = navy,
+                    selectedIconColor = navy
+                )
+            )
+
+            ComingSoonDrawerRow("Reorder Management")
+            ComingSoonDrawerRow("Supplier Claims")
+            ComingSoonDrawerRow("Reports")
+
+            if (role == "ADMIN") {
+                HorizontalDivider()
+
+                Text(
+                    text = "ADMINISTRATION",
+                    color = muted,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.padding(top = 12.dp)
+                )
+
+                ComingSoonDrawerRow("User Management")
+            }
+
+            HorizontalDivider()
+
+            Text(
+                text = "ACCOUNT",
+                color = muted,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 1.sp,
+                modifier = Modifier.padding(top = 12.dp)
+            )
+
+            NavigationDrawerItem(
+                label = {
+                    Text("My Profile")
+                },
+                selected = profileSelected,
+                onClick = onProfileClick,
+                icon = {
+                    Icon(
+                        imageVector = FluentuiSystemIconsPerson,
+                        contentDescription = null
+                    )
+                },
+                colors = NavigationDrawerItemDefaults.colors(
+                    selectedContainerColor = Color(0xFFE9DFF7),
+                    selectedTextColor = navy,
+                    selectedIconColor = navy
+                )
+            )
+
+            NavigationDrawerItem(
+                label = {
+                    Text(
+                        text = "Log out",
+                        color = Color(0xFFE45465)
+                    )
+                },
+                selected = false,
+                onClick = onLogoutClick
+            )
+        }
+    }
+}
+
+@Composable
+private fun ComingSoonDrawerRow(
+    title: String
+) {
+    val muted = Color(0xFF718198)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                start = 16.dp,
+                end = 12.dp,
+                top = 12.dp,
+                bottom = 12.dp
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Spacer(Modifier.width(24.dp))
+
+        Text(
+            text = title,
+            modifier = Modifier.weight(1f),
+            color = muted,
+            fontSize = 14.sp
+        )
+
+        Text(
+            text = "Soon",
+            color = muted,
+            fontSize = 11.sp
+        )
+    }
+}
+
 
 @Composable
 fun Greeting(name: String, modifier: Modifier = Modifier) {
