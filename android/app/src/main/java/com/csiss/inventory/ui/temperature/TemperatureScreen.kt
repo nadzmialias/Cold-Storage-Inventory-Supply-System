@@ -1,5 +1,4 @@
 package com.csiss.inventory.ui.temperature
-import com.csiss.inventory.ui.components.OutlineRefreshButton
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -113,7 +112,6 @@ fun TemperatureScreen(
                 repository.loadLive()
             }
         } catch (e: Exception) {
-            snapshot = null
             error = "Unable to retrieve temperature data. " +
                     "Check your connection and login."
         } finally {
@@ -190,13 +188,6 @@ fun TemperatureScreen(
                         fontWeight = FontWeight.SemiBold
                     )
                 }
-
-                // Stable label and button size, with an animated outline on manual refresh.
-                OutlineRefreshButton(
-                    onClick = requestRefresh,
-                    isRefreshing = manualRefreshPending,
-                    enabled = !loading
-                )
             }
 
             snapshot?.let { data ->
@@ -230,6 +221,27 @@ fun TemperatureScreen(
                     color = AlertRed,
                     fontSize = 14.sp
                 )
+            }
+
+            if (snapshot == null) {
+                TemperaturePlaceholderHero(isLoading = loading)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    MetricCard(
+                        title = "MINIMUM",
+                        value = "—",
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    MetricCard(
+                        title = "MAXIMUM",
+                        value = "—",
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
 
             snapshot?.let { data ->
@@ -543,6 +555,100 @@ private fun TemperatureHero(data: TemperatureSnapshot) {
         )
     }
 }
+
+
+@Composable
+private fun TemperaturePlaceholderHero(
+    isLoading: Boolean
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        Color(0xFF141C43),
+                        Color(0xFF373C85),
+                        Color(0xFF6651A7)
+                    )
+                ),
+                shape = RoundedCornerShape(24.dp)
+            )
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                "Cold Storage",
+                color = Color.White,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                "TEMPERATURE SENSOR",
+                color = Color(0xFFBECBE6),
+                fontSize = 10.sp,
+                letterSpacing = 0.9.sp
+            )
+        }
+
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                "LATEST RECORDED TEMPERATURE",
+                color = Color(0xFFD2DBED),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium
+            )
+
+            Text(
+                "—",
+                color = Color.White,
+                fontSize = 52.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Surface(
+                color = Color.White.copy(alpha = 0.12f),
+                shape = RoundedCornerShape(50.dp)
+            ) {
+                Text(
+                    text = if (isLoading) "LOADING" else "UNAVAILABLE",
+                    modifier = Modifier.padding(
+                        horizontal = 14.dp,
+                        vertical = 8.dp
+                    ),
+                    color = Color(0xFFDAE3EF),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
+        HorizontalDivider(
+            color = Color.White.copy(alpha = 0.16f)
+        )
+
+        Text(
+            text = if (isLoading) {
+                "Retrieving temperature data..."
+            } else {
+                "Temperature data unavailable"
+            },
+            modifier = Modifier.fillMaxWidth(),
+            color = Color(0xFFD2DBED),
+            fontSize = 12.sp,
+            textAlign =
+                androidx.compose.ui.text.style.TextAlign.Center
+        )
+    }
+}
+
 
 // ========================================
 // MINIMUM / MAXIMUM TEMPERATURE CARDS

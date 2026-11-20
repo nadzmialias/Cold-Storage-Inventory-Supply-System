@@ -22,7 +22,8 @@ data class SummaryStat(
 
 @Composable
 fun SummaryStatsCard(
-    stats: List<SummaryStat>
+    stats: List<SummaryStat>,
+    showPlaceholders: Boolean = false
 ) {
     Row(
         modifier = Modifier
@@ -51,8 +52,8 @@ fun SummaryStatsCard(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = stat.value,
-                    color = stat.valueColor,
+                    text =  if (showPlaceholders) "—" else stat.value,
+                    color =  if (showPlaceholders) Color.White else stat.valueColor,
                     fontSize = 26.sp,
                     fontWeight = FontWeight.Bold
                 )

@@ -20,7 +20,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.csiss.inventory.data.AlertRepository
 import com.csiss.inventory.data.SystemAlertRow
-import com.csiss.inventory.ui.components.OutlineRefreshButton
 import com.csiss.inventory.ui.components.SummaryStat
 import com.csiss.inventory.ui.components.SummaryStatsCard
 import kotlinx.coroutines.launch
@@ -49,6 +48,7 @@ fun NotificationScreen(
     val scope = rememberCoroutineScope()
 
     var alerts by remember { mutableStateOf<List<SystemAlertRow>>(emptyList()) }
+    var hasLoadedData by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     var manualRefreshPending by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -69,6 +69,7 @@ fun NotificationScreen(
         try {
             val loaded = repository.loadAndSyncAlerts()
             alerts = loaded
+            hasLoadedData = true
             val openAlerts = loaded.filter { !it.isResolved }
             onOpenCountChanged(openAlerts.size)
             AlertNotificationHelper.showSystemPopupIfNeeded(context, openAlerts)
@@ -138,15 +139,9 @@ fun NotificationScreen(
                         fontWeight = FontWeight.SemiBold
                     )
                 }
-                OutlineRefreshButton(
-                    onClick = requestRefresh,
-                    isRefreshing = manualRefreshPending,
-                    enabled = !loading
-                )
-
             }
 
-            AlertSummaryHero(alerts = alerts)
+            AlertSummaryHero(alerts = alerts, showPlaceholders = !hasLoadedData)
 
             // Filter Pills
             Row(
@@ -200,9 +195,6 @@ fun NotificationScreen(
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
             )
         }
-
-
-
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -275,7 +267,10 @@ fun NotificationScreen(
 } // End NotificationScreen
 
 @Composable
-private fun AlertSummaryHero(alerts: List<SystemAlertRow>) {
+private fun AlertSummaryHero(
+    alerts: List<SystemAlertRow>,
+    showPlaceholders: Boolean
+) {
     val openCount = alerts.count {
         !it.isResolved && !it.isAcknowledged
     }
@@ -302,7 +297,8 @@ private fun AlertSummaryHero(alerts: List<SystemAlertRow>) {
                 resolvedCount.toString(),
                 Color(0xFF98F0CD)
             )
-        )
+        ),
+        showPlaceholders = showPlaceholders
     )
 }
 

@@ -4,6 +4,10 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.Alignment
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
@@ -18,6 +22,7 @@ private enum class SupplierPage {
     List, Details, Add, Edit
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SupplierScreen(
     modifier: Modifier = Modifier,
@@ -33,7 +38,16 @@ fun SupplierScreen(
     var saveError by remember { mutableStateOf("") }
     var isRefreshing by remember { mutableStateOf(!isPreview) }
     var reloadKey by remember { mutableIntStateOf(0) }
+    var hasLoadedData by remember { mutableStateOf(isPreview) }
+    var manualRefreshPending by remember { mutableStateOf(false) }
+    val pullToRefreshState = rememberPullToRefreshState()
 
+    val requestRefresh: () -> Unit = {
+        if (!isPreview && !isRefreshing && !manualRefreshPending) {
+            manualRefreshPending = true
+            reloadKey++
+        }
+    }
     val suppliers = remember { mutableStateListOf<Supplier>() }
 
     // Fetch suppliers on launch and refresh
@@ -45,6 +59,7 @@ fun SupplierScreen(
             val list = loadSuppliersData()
             suppliers.clear()
             suppliers.addAll(list)
+            hasLoadedData = true
             databaseStatus = ""
         } catch (error: CancellationException) {
             throw error
@@ -53,6 +68,7 @@ fun SupplierScreen(
             databaseStatus = "Couldn't load suppliers. Check network/Supabase."
         } finally {
             isRefreshing = false
+            manualRefreshPending = false
         }
     }
 
@@ -115,21 +131,40 @@ fun SupplierScreen(
             ) {
                 when (page) {
                     SupplierPage.List -> {
-                        SupplierList(
-                            suppliers = suppliers,
-                            search = search,
-                            onSearch = { search = it },
-                            onAdd = {
-                                saveError = ""
-                                page = SupplierPage.Add
-                            },
-                            onSelect = { id ->
-                                selectedId = id
-                                page = SupplierPage.Details
-                            },
-                            onRefresh = { reloadKey++ },
-                            isRefreshing = isRefreshing
-                        )
+                        PullToRefreshBox(
+                            isRefreshing = manualRefreshPending,
+                            onRefresh = requestRefresh,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Background),
+                            state = pullToRefreshState,
+                            indicator = {
+                                PullToRefreshDefaults.Indicator(
+                                    modifier = Modifier.align(Alignment.TopCenter),
+                                    isRefreshing = manualRefreshPending,
+                                    containerColor = Blue,
+                                    color = White,
+                                    state = pullToRefreshState
+                                )
+                            }
+                        ) {
+                            SupplierList(
+                                hasLoadedData = hasLoadedData,
+                                suppliers = suppliers,
+                                search = search,
+                                onSearch = { search = it },
+                                onAdd = {
+                                    saveError = ""
+                                    page = SupplierPage.Add
+                                },
+                                onSelect = { id ->
+                                    selectedId = id
+                                    page = SupplierPage.Details
+                                },
+                                onRefresh = requestRefresh,
+                                isRefreshing = isRefreshing
+                            )
+                        }
                     }
 
                     SupplierPage.Details -> {

@@ -15,7 +15,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.LocalDate
-import com.csiss.inventory.ui.components.OutlineRefreshButton
 import com.csiss.inventory.ui.components.SummaryStat
 import com.csiss.inventory.ui.components.SummaryStatsCard
 
@@ -28,7 +27,8 @@ internal fun ProductList(
     onAdd: () -> Unit,
     onSelect: (Long) -> Unit,
     onRefresh: () -> Unit,
-    isRefreshing: Boolean
+    isRefreshing: Boolean,
+    hasLoadedData: Boolean
 ) {
     val filtered = products.filter { it.name.contains(search.trim(), ignoreCase = true) }
     LazyColumn(
@@ -64,11 +64,6 @@ internal fun ProductList(
                         fontSize = 26.sp,
                         fontWeight = FontWeight.SemiBold)
                 }
-                OutlineRefreshButton(
-                    onClick = onRefresh,
-                    isRefreshing = isRefreshing,
-                    enabled = !isRefreshing
-                )
             }
         }
 
@@ -93,7 +88,8 @@ internal fun ProductList(
                         }.toString(),
                         Color(0xFF9BE8CA)
                     )
-                )
+                ),
+                showPlaceholders = !hasLoadedData
             )
         }
 

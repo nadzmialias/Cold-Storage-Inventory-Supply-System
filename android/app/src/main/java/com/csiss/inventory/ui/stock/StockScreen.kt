@@ -20,7 +20,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.csiss.inventory.data.*
-import com.csiss.inventory.ui.components.OutlineRefreshButton
 import com.csiss.inventory.ui.components.SummaryStat
 import com.csiss.inventory.ui.components.SummaryStatsCard
 import kotlinx.coroutines.launch
@@ -124,18 +123,23 @@ fun StockScreen() {
                         fontWeight = FontWeight.SemiBold
                     )
                 }
-                OutlineRefreshButton(
-                    onClick = requestRefresh,
-                    isRefreshing = manualRefreshPending,
-                    enabled = !loading
-                )
-
             }
 
             // Summary Hero Card
-            snapshot?.let { data ->
-                StockSummaryHero(data = data)
+            val currentSnapshot = snapshot
+            if (currentSnapshot != null) {
+                StockSummaryHero(data = currentSnapshot)
+            } else {
+                SummaryStatsCard(
+                    stats = listOf(
+                        SummaryStat("ACTIVE BATCHES", "0"),
+                        SummaryStat("LOW STOCK", "0"),
+                        SummaryStat("EXPIRING ≤7D", "0")
+                    ),
+                    showPlaceholders = true
+                )
             }
+
 
             // Action Buttons Row (Stock In / Stock Out)
             Row(

@@ -4,6 +4,10 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.Alignment
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
@@ -22,6 +26,7 @@ private enum class Page {
     List, Details, Add, Edit
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InventoryScreen(
     modifier: Modifier = Modifier,
@@ -39,10 +44,18 @@ fun InventoryScreen(
     var saveError by remember { mutableStateOf("") }
     var isRefreshing by remember { mutableStateOf(!isPreview) }
     var reloadProducts by remember { mutableIntStateOf(0) }
-
-    val products = remember {
-        mutableStateListOf<Product>()
+    var hasLoadedData by remember {
+        mutableStateOf(isPreview)
     }
+    var manualRefreshPending by remember { mutableStateOf(false) }
+    val pullToRefreshState = rememberPullToRefreshState()
+    val requestRefresh: () -> Unit = {
+        if (!isPreview && !isRefreshing && !manualRefreshPending) {
+            manualRefreshPending = true
+            reloadProducts++
+        }
+    }
+    val products = remember { mutableStateListOf<Product>() }
 
     LaunchedEffect(isPreview, reloadProducts) {
         if (isPreview) return@LaunchedEffect
@@ -53,6 +66,7 @@ fun InventoryScreen(
             val loadedProducts = loadInventoryProducts()
             products.clear()
             products.addAll(loadedProducts)
+            hasLoadedData = true
             databaseStatus = ""
         } catch (error: CancellationException) {
             throw error
@@ -65,6 +79,7 @@ fun InventoryScreen(
             databaseStatus = "Couldn't load inventory. Check Logcat."
         } finally {
             isRefreshing = false
+            manualRefreshPending = false
         }
     }
 
@@ -141,26 +156,43 @@ fun InventoryScreen(
             ) {
                 when (page) {
                     Page.List -> {
-                        ProductList(
-                            products = products,
-                            today = today,
-                            search = search,
-                            onSearch = { search = it },
-                            onAdd = {
-                                saveError = ""
-                                page = Page.Add
-                            },
-                            onSelect = {
-                                selectedId = it
-                                page = Page.Details
-                            },
-                            onRefresh = {
-                                isRefreshing = true
-                                reloadProducts++
-                            },
-                            isRefreshing = isRefreshing
-                        )
+                        PullToRefreshBox(
+                            isRefreshing = manualRefreshPending,
+                            onRefresh = requestRefresh,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Background),
+                            state = pullToRefreshState,
+                            indicator = {
+                                PullToRefreshDefaults.Indicator(
+                                    modifier = Modifier.align(Alignment.TopCenter),
+                                    isRefreshing = manualRefreshPending,
+                                    containerColor = Blue,
+                                    color = White,
+                                    state = pullToRefreshState
+                                )
+                            }
+                        ) {
+                            ProductList(
+                                hasLoadedData = hasLoadedData,
+                                products = products,
+                                today = today,
+                                search = search,
+                                onSearch = { search = it },
+                                onAdd = {
+                                    saveError = ""
+                                    page = Page.Add
+                                },
+                                onSelect = {
+                                    selectedId = it
+                                    page = Page.Details
+                                },
+                                onRefresh = requestRefresh,
+                                isRefreshing = isRefreshing
+                            )
+                        }
                     }
+
 
                     Page.Details -> {
                         selected?.let { product ->

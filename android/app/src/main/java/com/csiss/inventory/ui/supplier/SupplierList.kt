@@ -14,7 +14,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.csiss.inventory.ui.components.OutlineRefreshButton
 import com.csiss.inventory.ui.components.SummaryStat
 import com.csiss.inventory.ui.components.SummaryStatsCard
 
@@ -26,7 +25,8 @@ internal fun SupplierList(
     onAdd: () -> Unit,
     onSelect: (Long) -> Unit,
     onRefresh: () -> Unit,
-    isRefreshing: Boolean
+    isRefreshing: Boolean,
+    hasLoadedData: Boolean
 ) {
     // Client-side filtering keeps full stats card constant
     val filtered = if (search.isBlank()) {
@@ -80,13 +80,6 @@ internal fun SupplierList(
                         fontWeight = FontWeight.Bold
                     )
                 }
-
-                OutlineRefreshButton(
-                    onClick = onRefresh,
-                    isRefreshing = isRefreshing,
-                    enabled = !isRefreshing
-                )
-
             }
         }
 
@@ -97,7 +90,8 @@ internal fun SupplierList(
                     SummaryStat("TOTAL SUPPLIERS", totalCount.toString()),
                     SummaryStat("ACTIVE", activeCount.toString()),
                     SummaryStat("INACTIVE", inactiveCount.toString())
-                )
+                ),
+                showPlaceholders = !hasLoadedData
             )
         }
 
