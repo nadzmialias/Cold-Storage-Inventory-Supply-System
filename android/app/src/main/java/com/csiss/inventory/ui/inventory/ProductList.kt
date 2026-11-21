@@ -105,7 +105,13 @@ internal fun ProductList(
                     )
                 }
             }
-
+            if (isRefreshing && products.isEmpty()) {
+                item {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
 
             item {
                 SummaryStatsCard(

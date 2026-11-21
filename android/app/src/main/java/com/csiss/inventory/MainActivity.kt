@@ -51,6 +51,7 @@ import com.csiss.inventory.ui.components.MaterialIconsInventory
 import com.csiss.inventory.ui.components.VscodeCodiconsGraphLine
 import com.csiss.inventory.ui.components.BootstrapExclamationSquare
 import com.csiss.inventory.ui.components.FluentuiSystemIconsClipboardBulletListRtl
+import com.csiss.inventory.ui.reorder.ReorderScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -143,7 +144,14 @@ class MainActivity : ComponentActivity() {
                                         drawerState.close()
                                         selectedTab = 6
                                     }
-                                }
+                                },
+                                reorderSelected = selectedTab == 7,
+                                onReorderClick = {
+                                    drawerScope.launch {
+                                        drawerState.close()
+                                        selectedTab = 7
+                                    }
+                                },
                             )
                         }
                     ) {
@@ -326,7 +334,7 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
                                     }
-
+                                    7 -> ReorderScreen()
                                 }
                             }
                         } // End Scaffold
@@ -472,6 +480,8 @@ private fun CompactManagementDrawer(
     onLogoutClick: () -> Unit,
     userSelected: Boolean,
     onUserClick: () -> Unit,
+    reorderSelected: Boolean,
+    onReorderClick: () -> Unit,
 ) {
     val navy = Color(0xFF132945)
     val muted = Color(0xFF718198)
@@ -552,9 +562,21 @@ private fun CompactManagementDrawer(
                 )
             )
 
-            ComingSoonDrawerRow(
-                title = "Reorder Management",
-                imageVector = FluentuiSystemIconsClipboardBulletListRtl
+            NavigationDrawerItem(
+                label = { Text("Reorder Management") },
+                selected = reorderSelected,
+                onClick = onReorderClick,
+                icon = {
+                    Icon(
+                        imageVector = FluentuiSystemIconsClipboardBulletListRtl,
+                        contentDescription = null
+                    )
+                },
+                colors = NavigationDrawerItemDefaults.colors(
+                    selectedContainerColor = Color(0xFFE9DFF7),
+                    selectedTextColor = navy,
+                    selectedIconColor = navy
+                )
             )
 
             ComingSoonDrawerRow(
