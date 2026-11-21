@@ -106,6 +106,7 @@ internal fun ProductList(
                 }
             }
 
+
             item {
                 SummaryStatsCard(
                     stats = listOf(
@@ -114,9 +115,10 @@ internal fun ProductList(
                             value = visibleProducts.size.toString()
                         ),
                         SummaryStat(
-                            label = "LOW STOCK",
-                            value = visibleProducts.count {
-                                it.status(today) == StockStatus.Low
+                            label = "NEEDS RESTOCK",
+                            value = visibleProducts.count { product ->
+                                val status = product.status(today)
+                                status == StockStatus.Low || status == StockStatus.Out
                             }.toString(),
                             valueColor = Color(0xFFFFB7C5)
                         ),
