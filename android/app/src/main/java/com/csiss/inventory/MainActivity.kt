@@ -301,6 +301,7 @@ class MainActivity : ComponentActivity() {
                                     )
 
                                     4 -> InventoryScreen(
+                                        userRole = currentUser.role,
                                         onHome = { selectedTab = 0 },
                                         onAlerts = {
                                             alertsFilter = 0

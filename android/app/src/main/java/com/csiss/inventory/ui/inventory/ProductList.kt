@@ -33,7 +33,7 @@ internal fun ProductList(
     today: LocalDate,
     search: String,
     onSearch: (String) -> Unit,
-    onAdd: () -> Unit,
+    onAdd: (() -> Unit)?,
     onSelect: (Long) -> Unit,
     onRefresh: () -> Unit,
     isRefreshing: Boolean,
@@ -193,7 +193,7 @@ internal fun ProductList(
                 }
             }
 
-            if (!showArchived) {
+            if (!showArchived && onAdd != null) {
                 item { PrimaryButton("+ Add New Item", onAdd) }
             }
 

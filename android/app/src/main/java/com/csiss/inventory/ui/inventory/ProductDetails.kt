@@ -16,6 +16,7 @@ import java.time.LocalDate
 internal fun ProductDetails(product: Product, today: LocalDate, back: () -> Unit,
                             edit: () -> Unit, delete: () -> Unit,
                             archive: () -> Unit, restore: () -> Unit,
+                            canEditProducts: Boolean, isAdmin: Boolean,
                             busy: Boolean = false) {
     LazyColumn(contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item { ScreenTitle("Product details", "Product catalogue / PRD-${product.id.toString().padStart(4, '0')}", back) }
@@ -41,7 +42,7 @@ internal fun ProductDetails(product: Product, today: LocalDate, back: () -> Unit
                 }
             }
         }
-        if (product.isActive) {
+        if (product.isActive && canEditProducts) {
             item {
                 Button(onClick = edit, enabled = !busy,
                     modifier = Modifier.fillMaxWidth().height(48.dp),
@@ -50,6 +51,8 @@ internal fun ProductDetails(product: Product, today: LocalDate, back: () -> Unit
                     Text("Edit product")
                 }
             }
+        }
+        if (product.isActive && isAdmin) {
             item {
                 OutlinedButton(onClick = archive, enabled = product.canArchive && !busy,
                     modifier = Modifier.fillMaxWidth().height(48.dp), shape = Shape) {
@@ -60,17 +63,17 @@ internal fun ProductDetails(product: Product, today: LocalDate, back: () -> Unit
                         fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
                 }
             }
-        } else {
+        } else if (!product.isActive) {
             item {
                 Text("Archived product", color = Muted, fontWeight = FontWeight.SemiBold)
-                Button(onClick = restore, enabled = !busy,
+                if (isAdmin) Button(onClick = restore, enabled = !busy,
                     modifier = Modifier.fillMaxWidth().height(48.dp), shape = Shape,
                     colors = ButtonDefaults.buttonColors(containerColor = Blue)) {
                     Text("Restore product")
                 }
             }
         }
-        if (product.canDelete) item {
+        if (isAdmin && product.canDelete) item {
             OutlinedButton(
                 onClick = delete, enabled = !busy,
                 modifier = Modifier.fillMaxWidth().height(48.dp),

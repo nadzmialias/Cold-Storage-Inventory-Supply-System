@@ -14,7 +14,7 @@ import androidx.compose.ui.unit.dp
 import com.csiss.inventory.data.changeInventoryProductState
 import com.csiss.inventory.data.insertInventoryProduct
 import com.csiss.inventory.data.loadInventoryProducts
-import com.csiss.inventory.data.updateInventoryMinimum
+import com.csiss.inventory.data.updateInventoryProduct
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -28,8 +28,11 @@ fun InventoryScreen(
     modifier: Modifier = Modifier,
     onHome: (() -> Unit)? = null,
     onAlerts: (() -> Unit)? = null,
-    onProfile: (() -> Unit)? = null
+    onProfile: (() -> Unit)? = null,
+    userRole: String? = null
 ) {
+    val isAdmin = userRole == "ADMIN"
+    val canEditProducts = isAdmin || userRole == "STAFF"
     val context = LocalContext.current
     val today = LocalDate.now()
     val isPreview = LocalInspectionMode.current
@@ -150,10 +153,10 @@ fun InventoryScreen(
                             today = today,
                             search = search,
                             onSearch = { search = it },
-                            onAdd = {
+                            onAdd = if (canEditProducts) ({
                                 saveError = ""
                                 page = Page.Add
-                            },
+                            }) else null,
                             onSelect = {
                                 selectedId = it
                                 page = Page.Details
@@ -190,6 +193,8 @@ fun InventoryScreen(
                                     actionError = ""
                                     pendingAction = "restore"
                                 },
+                                canEditProducts = canEditProducts,
+                                isAdmin = isAdmin,
                                 busy = actionSaving
                             )
                         }
@@ -202,9 +207,10 @@ fun InventoryScreen(
 
                         ProductForm(
                             product = editing,
-                            back = goBack
+                            back = goBack,
+                            isAdmin = isAdmin
                         ) { name, category, unit, photo, minimum, description ->
-                            if (isSaving) return@ProductForm
+                            if (!canEditProducts || isSaving) return@ProductForm
 
                             saveError = ""
                             isSaving = true
@@ -228,9 +234,12 @@ fun InventoryScreen(
                                         reloadProducts++
                                     } else {
                                         val savedImagePath =
-                                            updateInventoryMinimum(
+                                            updateInventoryProduct(
                                                 productId = editing.id,
-                                                minimum = minimum,
+                                                name = name,
+                                                category = category,
+                                                unit = unit,
+                                                minimum = minimum.takeIf { isAdmin },
                                                 description = description,
                                                 resolver = context.contentResolver,
                                                 photo = photo
@@ -290,7 +299,7 @@ fun InventoryScreen(
 
         val action = pendingAction
         val actionProduct = selected
-        if (action != null && actionProduct != null) {
+        if (isAdmin && action != null && actionProduct != null) {
             val label = when (action) {
                 "archive" -> "Archive"
                 "restore" -> "Restore"
@@ -361,5 +370,5 @@ fun InventoryScreen(
 )
 @Composable
 private fun InventoryScreenPreview() {
-    InventoryScreen()
+    InventoryScreen(userRole = "ADMIN")
 }

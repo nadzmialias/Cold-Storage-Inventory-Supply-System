@@ -39,6 +39,7 @@ private data class NewProductRow(
     @SerialName("category_id") val categoryId: Long,
     @SerialName("unit_id") val unitId: Long,
     @SerialName("min_stock_level") val minimum: Double,
+    @SerialName("is_active") val isActive: Boolean,
     @SerialName("image_path") val imagePath: String? = null
 )
 
@@ -202,6 +203,7 @@ internal suspend fun insertInventoryProduct(
                 categoryId = category.id,
                 unitId = unit.id,
                 minimum = minimum,
+                isActive = true,
                 imagePath = imagePath
             )
         )
@@ -241,9 +243,12 @@ internal suspend fun addInventoryOption(
         .insert(mapOf(column to name))
 }
 
-internal suspend fun updateInventoryMinimum(
+internal suspend fun updateInventoryProduct(
     productId: Long,
-    minimum: Double,
+    name: String,
+    category: CategoryOption,
+    unit: UnitOption,
+    minimum: Double?,
     description: String,
     resolver: ContentResolver,
     photo: Uri?
@@ -255,7 +260,12 @@ internal suspend fun updateInventoryMinimum(
     val updatedRows = SupabaseClientProvider.client
         .from("products")
         .update({
-            set("min_stock_level", minimum)
+            set("product_name", name)
+            set("category", category.name)
+            set("category_id", category.id)
+            set("unit", unit.name)
+            set("unit_id", unit.id)
+            if (minimum != null) set("min_stock_level", minimum)
             set("description", description)
 
             if (newImagePath != null) {
