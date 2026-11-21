@@ -112,7 +112,7 @@ internal fun SupplierForm(
         item {
             Spacer(Modifier.height(8.dp))
             PrimaryButton(
-                label = if (isEdit) "Update supplier" else "Save",
+                label = if (isEdit) "Update" else "Save",
                 onClick = {
                     var isValid = true
 
@@ -160,7 +160,7 @@ internal fun SupplierForm(
         if (isEdit && delete != null) {
             item {
                 OutlinedDeleteButton(
-                    label = "Delete supplier",
+                    label = "Delete",
                     onClick = delete
                 )
             }
