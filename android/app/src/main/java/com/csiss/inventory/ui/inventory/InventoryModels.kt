@@ -22,9 +22,12 @@ internal data class Product(
     val description: String = "",
     val photo: Uri? = null,
     val hasHistory: Boolean = false,
-    val imagePath: String? = null
+    val imagePath: String? = null,
+    val isActive: Boolean = true,
+    val hasBatches: Boolean = false
 ) {
-    val canDelete: Boolean get() = quantity == 0.0 && !hasHistory
+    val canArchive: Boolean get() = isActive && quantity == 0.0
+    val canDelete: Boolean get() = quantity == 0.0 && !hasHistory && !hasBatches
 }
 
 internal enum class StockStatus(val title: String, val foreground: Color, val background: Color) {

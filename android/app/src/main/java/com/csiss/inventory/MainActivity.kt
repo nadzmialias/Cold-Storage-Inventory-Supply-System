@@ -47,6 +47,7 @@ import com.csiss.inventory.ui.components.FluentuiSystemIconsPerson
 import com.csiss.inventory.ui.components.FluentuiSystemIconsSupplier
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.csiss.inventory.ui.components.HeroiconsUserGroup
+import com.csiss.inventory.ui.components.MaterialIconsInventory
 import com.csiss.inventory.ui.components.VscodeCodiconsGraphLine
 import com.csiss.inventory.ui.components.BootstrapExclamationSquare
 import com.csiss.inventory.ui.components.FluentuiSystemIconsClipboardBulletListRtl
@@ -212,7 +213,7 @@ class MainActivity : ComponentActivity() {
                                         onClick = { selectedTab = 4 },
                                         icon = {
                                             Icon(
-                                                imageVector = FluentuiSystemIconsBox,
+                                                imageVector = MaterialIconsInventory,
                                                 contentDescription = null
                                             )
                                         },

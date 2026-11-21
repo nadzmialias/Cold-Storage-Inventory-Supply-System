@@ -4,10 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.ui.Alignment
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
@@ -15,6 +11,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.csiss.inventory.data.changeInventoryProductState
 import com.csiss.inventory.data.insertInventoryProduct
 import com.csiss.inventory.data.loadInventoryProducts
 import com.csiss.inventory.data.updateInventoryMinimum
@@ -26,7 +23,6 @@ private enum class Page {
     List, Details, Add, Edit
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InventoryScreen(
     modifier: Modifier = Modifier,
@@ -44,18 +40,10 @@ fun InventoryScreen(
     var saveError by remember { mutableStateOf("") }
     var isRefreshing by remember { mutableStateOf(!isPreview) }
     var reloadProducts by remember { mutableIntStateOf(0) }
-    var hasLoadedData by remember {
-        mutableStateOf(isPreview)
+
+    val products = remember {
+        mutableStateListOf<Product>()
     }
-    var manualRefreshPending by remember { mutableStateOf(false) }
-    val pullToRefreshState = rememberPullToRefreshState()
-    val requestRefresh: () -> Unit = {
-        if (!isPreview && !isRefreshing && !manualRefreshPending) {
-            manualRefreshPending = true
-            reloadProducts++
-        }
-    }
-    val products = remember { mutableStateListOf<Product>() }
 
     LaunchedEffect(isPreview, reloadProducts) {
         if (isPreview) return@LaunchedEffect
@@ -63,10 +51,9 @@ fun InventoryScreen(
         isRefreshing = true
 
         try {
-            val loadedProducts = loadInventoryProducts()
+            val loadedProducts = loadInventoryProducts(active = null)
             products.clear()
             products.addAll(loadedProducts)
-            hasLoadedData = true
             databaseStatus = ""
         } catch (error: CancellationException) {
             throw error
@@ -79,14 +66,16 @@ fun InventoryScreen(
             databaseStatus = "Couldn't load inventory. Check Logcat."
         } finally {
             isRefreshing = false
-            manualRefreshPending = false
         }
     }
 
     var page by remember { mutableStateOf(Page.List) }
     var selectedId by remember { mutableStateOf<Long?>(null) }
     var search by rememberSaveable { mutableStateOf("") }
-    var deleteDialog by remember { mutableStateOf(false) }
+    var pendingAction by remember { mutableStateOf<String?>(null) }
+    var actionSaving by remember { mutableStateOf(false) }
+    var actionError by remember { mutableStateOf("") }
+    var showArchived by rememberSaveable { mutableStateOf(false) }
 
     val selected = products.firstOrNull {
         it.id == selectedId
@@ -102,7 +91,7 @@ fun InventoryScreen(
 
     BackHandler(
         enabled = page != Page.List,
-        onBack = goBack
+        onBack = { if (!actionSaving && !isSaving) goBack() }
     )
 
     MaterialTheme(
@@ -156,43 +145,28 @@ fun InventoryScreen(
             ) {
                 when (page) {
                     Page.List -> {
-                        PullToRefreshBox(
-                            isRefreshing = manualRefreshPending,
-                            onRefresh = requestRefresh,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Background),
-                            state = pullToRefreshState,
-                            indicator = {
-                                PullToRefreshDefaults.Indicator(
-                                    modifier = Modifier.align(Alignment.TopCenter),
-                                    isRefreshing = manualRefreshPending,
-                                    containerColor = Blue,
-                                    color = White,
-                                    state = pullToRefreshState
-                                )
-                            }
-                        ) {
-                            ProductList(
-                                hasLoadedData = hasLoadedData,
-                                products = products,
-                                today = today,
-                                search = search,
-                                onSearch = { search = it },
-                                onAdd = {
-                                    saveError = ""
-                                    page = Page.Add
-                                },
-                                onSelect = {
-                                    selectedId = it
-                                    page = Page.Details
-                                },
-                                onRefresh = requestRefresh,
-                                isRefreshing = isRefreshing
-                            )
-                        }
+                        ProductList(
+                            products = products,
+                            today = today,
+                            search = search,
+                            onSearch = { search = it },
+                            onAdd = {
+                                saveError = ""
+                                page = Page.Add
+                            },
+                            onSelect = {
+                                selectedId = it
+                                page = Page.Details
+                            },
+                            onRefresh = {
+                                isRefreshing = true
+                                reloadProducts++
+                            },
+                            isRefreshing = isRefreshing,
+                            showArchived = showArchived,
+                            onShowArchived = { showArchived = it }
+                        )
                     }
-
 
                     Page.Details -> {
                         selected?.let { product ->
@@ -205,8 +179,18 @@ fun InventoryScreen(
                                     page = Page.Edit
                                 },
                                 delete = {
-                                    deleteDialog = true
-                                }
+                                    actionError = ""
+                                    pendingAction = "delete"
+                                },
+                                archive = {
+                                    actionError = ""
+                                    pendingAction = "archive"
+                                },
+                                restore = {
+                                    actionError = ""
+                                    pendingAction = "restore"
+                                },
+                                busy = actionSaving
                             )
                         }
                     }
@@ -239,6 +223,7 @@ fun InventoryScreen(
                                         )
 
                                         search = ""
+                                        showArchived = false
                                         page = Page.List
                                         reloadProducts++
                                     } else {
@@ -303,45 +288,64 @@ fun InventoryScreen(
             }
         }
 
-        if (deleteDialog && selected != null) {
-            AlertDialog(
-                onDismissRequest = {
-                    deleteDialog = false
-                },
-                title = {
-                    Text("Delete this product?")
-                },
+        val action = pendingAction
+        val actionProduct = selected
+        if (action != null && actionProduct != null) {
+            val label = when (action) {
+                "archive" -> "Archive"
+                "restore" -> "Restore"
+                else -> "Delete"
+            }
+            InventoryDialog(
+                onDismissRequest = { if (!actionSaving) pendingAction = null },
+                title = { Text("$label this product?") },
                 text = {
-                    Text(
-                        "Remove ${selected.name}? Products with stock " +
-                                "or movement history must be archived instead."
-                    )
-                },
-                confirmButton = {
-                    Button(
-                        enabled = selected.canDelete,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Red
-                        ),
-                        onClick = {
-                            products.removeAll {
-                                it.id == selected.id
-                            }
-
-                            selectedId = null
-                            deleteDialog = false
-                            page = Page.List
+                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Text(when (action) {
+                            "archive" -> "Hide ${actionProduct.name} from the active catalogue? Its batch and movement history will be preserved."
+                            "restore" -> "Return ${actionProduct.name} to the active catalogue?"
+                            else -> "Permanently delete ${actionProduct.name}? This action cannot be undone."
+                        })
+                        if (actionError.isNotEmpty()) {
+                            Text(actionError, color = MaterialTheme.colorScheme.error)
                         }
-                    ) {
-                        Text("Delete product")
                     }
                 },
-                dismissButton = {
-                    OutlinedButton(
-                        onClick = {
-                            deleteDialog = false
+                confirmButton = {
+                    Button(enabled = !actionSaving, onClick = {
+                        if (!actionSaving) {
+                            actionSaving = true
+                            actionError = ""
+                            scope.launch {
+                                try {
+                                    changeInventoryProductState(actionProduct.id, action)
+                                    // Only change the screen after Supabase confirms success.
+                                    if (action == "delete") {
+                                        products.removeAll { it.id == actionProduct.id }
+                                    } else {
+                                        val index = products.indexOfFirst { it.id == actionProduct.id }
+                                        if (index >= 0) products[index] = actionProduct.copy(
+                                            isActive = action == "restore"
+                                        )
+                                    }
+                                    pendingAction = null
+                                    selectedId = null
+                                    page = Page.List
+                                    reloadProducts++
+                                } catch (error: CancellationException) {
+                                    throw error
+                                } catch (error: Exception) {
+                                    android.util.Log.e("InventoryAction", "Failed to $action product", error)
+                                    actionError = "Couldn't ${action.lowercase()} product. Refresh and try again; check Logcat InventoryAction if it continues."
+                                } finally {
+                                    actionSaving = false
+                                }
+                            }
                         }
-                    ) {
+                    }) { Text(if (actionSaving) "Saving…" else label) }
+                },
+                dismissButton = {
+                    TextButton(enabled = !actionSaving, onClick = { pendingAction = null }) {
                         Text("Cancel")
                     }
                 }
