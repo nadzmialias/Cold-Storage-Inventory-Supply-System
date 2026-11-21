@@ -39,11 +39,17 @@ import com.csiss.inventory.ui.inventory.InventoryScreen
 import com.csiss.inventory.ui.supplier.SupplierScreen
 import com.csiss.inventory.ui.temperature.TemperatureScreen
 import com.csiss.inventory.ui.theme.CSISSTheme
+import com.csiss.inventory.ui.user.UserManagementScreen
 import com.csiss.inventory.ui.components.FluentuiSystemIconsBox
 import com.csiss.inventory.ui.components.FluentuiSystemIconsTemperature
 import com.csiss.inventory.ui.components.FluentuiSystemIconsAlert
 import com.csiss.inventory.ui.components.FluentuiSystemIconsPerson
 import com.csiss.inventory.ui.components.FluentuiSystemIconsSupplier
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.csiss.inventory.ui.components.HeroiconsUserGroup
+import com.csiss.inventory.ui.components.VscodeCodiconsGraphLine
+import com.csiss.inventory.ui.components.BootstrapExclamationSquare
+import com.csiss.inventory.ui.components.FluentuiSystemIconsClipboardBulletListRtl
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -111,6 +117,8 @@ class MainActivity : ComponentActivity() {
                                 role = currentUser.role,
                                 supplierSelected = selectedTab == 5,
                                 profileSelected = selectedTab == 3,
+                                userSelected = selectedTab == 6,
+
                                 onSupplierClick = {
                                     drawerScope.launch {
                                         drawerState.close()
@@ -128,12 +136,17 @@ class MainActivity : ComponentActivity() {
                                         drawerState.close()
                                         showDrawerLogoutDialog = true
                                     }
+                                },
+                                onUserClick = {
+                                    drawerScope.launch {
+                                        drawerState.close()
+                                        selectedTab = 6
+                                    }
                                 }
                             )
                         }
                     ) {
                         Scaffold(
-
                             modifier = Modifier
                                 .fillMaxSize()
                                 .statusBarsPadding(),
@@ -303,6 +316,15 @@ class MainActivity : ComponentActivity() {
                                         },
                                         onProfile = { selectedTab = 3 }
                                     )
+
+                                    6 -> {
+                                        if (currentUser.role == "ADMIN") {
+                                            UserManagementScreen(
+                                                currentUserId = currentUser.userId
+                                            )
+                                        }
+                                    }
+
                                 }
                             }
                         } // End Scaffold
@@ -445,7 +467,9 @@ private fun CompactManagementDrawer(
     profileSelected: Boolean,
     onSupplierClick: () -> Unit,
     onProfileClick: () -> Unit,
-    onLogoutClick: () -> Unit
+    onLogoutClick: () -> Unit,
+    userSelected: Boolean,
+    onUserClick: () -> Unit,
 ) {
     val navy = Color(0xFF132945)
     val muted = Color(0xFF718198)
@@ -526,13 +550,24 @@ private fun CompactManagementDrawer(
                 )
             )
 
-            ComingSoonDrawerRow("Reorder Management")
-            ComingSoonDrawerRow("Supplier Claims")
-            ComingSoonDrawerRow("Reports")
+            ComingSoonDrawerRow(
+                title = "Reorder Management",
+                imageVector = FluentuiSystemIconsClipboardBulletListRtl
+            )
+
+            ComingSoonDrawerRow(
+                title = "Supplier Claims",
+                imageVector = BootstrapExclamationSquare
+            )
+
+            ComingSoonDrawerRow(
+                title = "Reports",
+                imageVector = VscodeCodiconsGraphLine
+            )
+
 
             if (role == "ADMIN") {
                 HorizontalDivider()
-
                 Text(
                     text = "ADMINISTRATION",
                     color = muted,
@@ -542,7 +577,25 @@ private fun CompactManagementDrawer(
                     modifier = Modifier.padding(top = 12.dp)
                 )
 
-                ComingSoonDrawerRow("User Management")
+                NavigationDrawerItem(
+                    label = {
+                        Text("User Management")
+                    },
+                    selected = userSelected,
+                    onClick = onUserClick,
+                    icon = {
+                        Icon(
+                            imageVector = HeroiconsUserGroup,
+                            contentDescription = null
+                        )
+                    },
+                    colors = NavigationDrawerItemDefaults.colors(
+                        selectedContainerColor = Color(0xFFE9DFF7),
+                        selectedTextColor = Color(0xFF132945),
+                        selectedIconColor = Color(0xFF132945)
+                    )
+                )
+
             }
 
             HorizontalDivider()
@@ -589,9 +642,11 @@ private fun CompactManagementDrawer(
     }
 }
 
+
 @Composable
 private fun ComingSoonDrawerRow(
-    title: String
+    title: String,
+    imageVector: ImageVector
 ) {
     val muted = Color(0xFF718198)
 
@@ -607,7 +662,12 @@ private fun ComingSoonDrawerRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Spacer(Modifier.width(24.dp))
+        Icon(
+            imageVector = imageVector,
+            contentDescription = null,
+            modifier = Modifier.size(24.dp),
+            tint = Color(0xFF132945)
+        )
 
         Text(
             text = title,
@@ -623,6 +683,7 @@ private fun ComingSoonDrawerRow(
         )
     }
 }
+
 
 
 @Composable
