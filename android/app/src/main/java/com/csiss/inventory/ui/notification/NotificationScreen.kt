@@ -7,7 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import com.csiss.inventory.ui.components.CsissLightRefreshIndicator
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,7 +20,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.csiss.inventory.data.AlertRepository
 import com.csiss.inventory.data.SystemAlertRow
-import com.csiss.inventory.ui.components.OutlineRefreshButton
+import com.csiss.inventory.ui.components.SummaryStat
+import com.csiss.inventory.ui.components.SummaryStatsCard
 import kotlinx.coroutines.launch
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -47,6 +48,7 @@ fun NotificationScreen(
     val scope = rememberCoroutineScope()
 
     var alerts by remember { mutableStateOf<List<SystemAlertRow>>(emptyList()) }
+    var hasLoadedData by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     var manualRefreshPending by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -67,6 +69,7 @@ fun NotificationScreen(
         try {
             val loaded = repository.loadAndSyncAlerts()
             alerts = loaded
+            hasLoadedData = true
             val openAlerts = loaded.filter { !it.isResolved }
             onOpenCountChanged(openAlerts.size)
             AlertNotificationHelper.showSystemPopupIfNeeded(context, openAlerts)
@@ -87,24 +90,26 @@ fun NotificationScreen(
         }
     }
 
+
+
     PullToRefreshBox(
-        isRefreshing = manualRefreshPending,
+        isRefreshing = loading,
         onRefresh = requestRefresh,
         modifier = Modifier
             .fillMaxSize()
             .background(Background),
         state = pullToRefreshState,
         indicator = {
-            PullToRefreshDefaults.Indicator(
-                modifier = Modifier.align(Alignment.TopCenter),
-                isRefreshing = manualRefreshPending,
-                containerColor = Navy,
-                color = Color.White,
-                state = pullToRefreshState
+            CsissLightRefreshIndicator(
+                state = pullToRefreshState,
+                isRefreshing = loading,
+                modifier = Modifier.align(Alignment.TopCenter)
             )
         }
     ) {
-        Column(
+
+
+    Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Background)
@@ -136,15 +141,9 @@ fun NotificationScreen(
                         fontWeight = FontWeight.SemiBold
                     )
                 }
-                OutlineRefreshButton(
-                    onClick = requestRefresh,
-                    isRefreshing = manualRefreshPending,
-                    enabled = !loading
-                )
-
             }
 
-            AlertSummaryHero(alerts = alerts)
+            AlertSummaryHero(alerts = alerts, showPlaceholders = !hasLoadedData)
 
             // Filter Pills
             Row(
@@ -186,10 +185,6 @@ fun NotificationScreen(
             }
         }
 
-        if (loading && alerts.isEmpty()) {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-        }
-
         error?.let {
             Text(
                 text = it,
@@ -198,9 +193,6 @@ fun NotificationScreen(
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
             )
         }
-
-
-
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -272,49 +264,42 @@ fun NotificationScreen(
 
 } // End NotificationScreen
 
-
-
 @Composable
-private fun AlertSummaryHero(alerts: List<SystemAlertRow>) {
-    val openCount = alerts.count { !it.isResolved && !it.isAcknowledged }
+private fun AlertSummaryHero(
+    alerts: List<SystemAlertRow>,
+    showPlaceholders: Boolean
+) {
+    val openCount = alerts.count {
+        !it.isResolved && !it.isAcknowledged
+    }
     val ackCount = alerts.count { it.isAcknowledged }
     val resolvedCount = alerts.count { it.isResolved }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 100.dp)
-            .background(
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        Color(0xFF141C43),
-                        Color(0xFF373C85),
-                        Color(0xFF6651A7)
-                    )
-                ),
-                shape = RoundedCornerShape(20.dp)
+    SummaryStatsCard(
+        stats = listOf(
+            SummaryStat(
+                "UNREAD / ACTIVE",
+                openCount.toString(),
+                if (openCount > 0)
+                    Color(0xFFFFBEC6)
+                else
+                    Color.White
+            ),
+            SummaryStat(
+                "ACKNOWLEDGED",
+                ackCount.toString(),
+                Color(0xFFFDE68A)
+            ),
+            SummaryStat(
+                "RESOLVED",
+                resolvedCount.toString(),
+                Color(0xFF98F0CD)
             )
-            .padding(18.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        HeroMetric(
-            label = "UNREAD / ACTIVE",
-            value = "$openCount",
-            accent = if (openCount > 0) Color(0xFFFFBEC6) else Color.White
-        )
-        HeroMetric(
-            label = "ACKNOWLEDGED",
-            value = "$ackCount",
-            accent = Color(0xFFFDE68A)
-        )
-        HeroMetric(
-            label = "RESOLVED",
-            value = "$resolvedCount",
-            accent = Color(0xFF98F0CD)
-        )
-    }
+        ),
+        showPlaceholders = showPlaceholders
+    )
 }
+
 
 @Composable
 private fun HeroMetric(label: String, value: String, accent: Color) {

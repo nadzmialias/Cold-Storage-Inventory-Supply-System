@@ -11,9 +11,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.csiss.inventory.data.changeInventoryProductState
 import com.csiss.inventory.data.insertInventoryProduct
 import com.csiss.inventory.data.loadInventoryProducts
-import com.csiss.inventory.data.updateInventoryMinimum
+import com.csiss.inventory.data.updateInventoryProduct
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -27,8 +28,11 @@ fun InventoryScreen(
     modifier: Modifier = Modifier,
     onHome: (() -> Unit)? = null,
     onAlerts: (() -> Unit)? = null,
-    onProfile: (() -> Unit)? = null
+    onProfile: (() -> Unit)? = null,
+    userRole: String? = null
 ) {
+    val isAdmin = userRole == "ADMIN"
+    val canEditProducts = isAdmin || userRole == "STAFF"
     val context = LocalContext.current
     val today = LocalDate.now()
     val isPreview = LocalInspectionMode.current
@@ -50,7 +54,7 @@ fun InventoryScreen(
         isRefreshing = true
 
         try {
-            val loadedProducts = loadInventoryProducts()
+            val loadedProducts = loadInventoryProducts(active = null)
             products.clear()
             products.addAll(loadedProducts)
             databaseStatus = ""
@@ -71,7 +75,10 @@ fun InventoryScreen(
     var page by remember { mutableStateOf(Page.List) }
     var selectedId by remember { mutableStateOf<Long?>(null) }
     var search by rememberSaveable { mutableStateOf("") }
-    var deleteDialog by remember { mutableStateOf(false) }
+    var pendingAction by remember { mutableStateOf<String?>(null) }
+    var actionSaving by remember { mutableStateOf(false) }
+    var actionError by remember { mutableStateOf("") }
+    var showArchived by rememberSaveable { mutableStateOf(false) }
 
     val selected = products.firstOrNull {
         it.id == selectedId
@@ -87,7 +94,7 @@ fun InventoryScreen(
 
     BackHandler(
         enabled = page != Page.List,
-        onBack = goBack
+        onBack = { if (!actionSaving && !isSaving) goBack() }
     )
 
     MaterialTheme(
@@ -146,10 +153,10 @@ fun InventoryScreen(
                             today = today,
                             search = search,
                             onSearch = { search = it },
-                            onAdd = {
+                            onAdd = if (canEditProducts) ({
                                 saveError = ""
                                 page = Page.Add
-                            },
+                            }) else null,
                             onSelect = {
                                 selectedId = it
                                 page = Page.Details
@@ -158,7 +165,9 @@ fun InventoryScreen(
                                 isRefreshing = true
                                 reloadProducts++
                             },
-                            isRefreshing = isRefreshing
+                            isRefreshing = isRefreshing,
+                            showArchived = showArchived,
+                            onShowArchived = { showArchived = it }
                         )
                     }
 
@@ -173,8 +182,20 @@ fun InventoryScreen(
                                     page = Page.Edit
                                 },
                                 delete = {
-                                    deleteDialog = true
-                                }
+                                    actionError = ""
+                                    pendingAction = "delete"
+                                },
+                                archive = {
+                                    actionError = ""
+                                    pendingAction = "archive"
+                                },
+                                restore = {
+                                    actionError = ""
+                                    pendingAction = "restore"
+                                },
+                                canEditProducts = canEditProducts,
+                                isAdmin = isAdmin,
+                                busy = actionSaving
                             )
                         }
                     }
@@ -186,9 +207,10 @@ fun InventoryScreen(
 
                         ProductForm(
                             product = editing,
-                            back = goBack
+                            back = goBack,
+                            isAdmin = isAdmin
                         ) { name, category, unit, photo, minimum, description ->
-                            if (isSaving) return@ProductForm
+                            if (!canEditProducts || isSaving) return@ProductForm
 
                             saveError = ""
                             isSaving = true
@@ -207,13 +229,17 @@ fun InventoryScreen(
                                         )
 
                                         search = ""
+                                        showArchived = false
                                         page = Page.List
                                         reloadProducts++
                                     } else {
                                         val savedImagePath =
-                                            updateInventoryMinimum(
+                                            updateInventoryProduct(
                                                 productId = editing.id,
-                                                minimum = minimum,
+                                                name = name,
+                                                category = category,
+                                                unit = unit,
+                                                minimum = minimum.takeIf { isAdmin },
                                                 description = description,
                                                 resolver = context.contentResolver,
                                                 photo = photo
@@ -271,45 +297,64 @@ fun InventoryScreen(
             }
         }
 
-        if (deleteDialog && selected != null) {
-            AlertDialog(
-                onDismissRequest = {
-                    deleteDialog = false
-                },
-                title = {
-                    Text("Delete this product?")
-                },
+        val action = pendingAction
+        val actionProduct = selected
+        if (isAdmin && action != null && actionProduct != null) {
+            val label = when (action) {
+                "archive" -> "Archive"
+                "restore" -> "Restore"
+                else -> "Delete"
+            }
+            InventoryDialog(
+                onDismissRequest = { if (!actionSaving) pendingAction = null },
+                title = { Text("$label this product?") },
                 text = {
-                    Text(
-                        "Remove ${selected.name}? Products with stock " +
-                                "or movement history must be archived instead."
-                    )
-                },
-                confirmButton = {
-                    Button(
-                        enabled = selected.canDelete,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Red
-                        ),
-                        onClick = {
-                            products.removeAll {
-                                it.id == selected.id
-                            }
-
-                            selectedId = null
-                            deleteDialog = false
-                            page = Page.List
+                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Text(when (action) {
+                            "archive" -> "Hide ${actionProduct.name} from the active catalogue? Its batch and movement history will be preserved."
+                            "restore" -> "Return ${actionProduct.name} to the active catalogue?"
+                            else -> "Permanently delete ${actionProduct.name}? This action cannot be undone."
+                        })
+                        if (actionError.isNotEmpty()) {
+                            Text(actionError, color = MaterialTheme.colorScheme.error)
                         }
-                    ) {
-                        Text("Delete product")
                     }
                 },
-                dismissButton = {
-                    OutlinedButton(
-                        onClick = {
-                            deleteDialog = false
+                confirmButton = {
+                    Button(enabled = !actionSaving, onClick = {
+                        if (!actionSaving) {
+                            actionSaving = true
+                            actionError = ""
+                            scope.launch {
+                                try {
+                                    changeInventoryProductState(actionProduct.id, action)
+                                    // Only change the screen after Supabase confirms success.
+                                    if (action == "delete") {
+                                        products.removeAll { it.id == actionProduct.id }
+                                    } else {
+                                        val index = products.indexOfFirst { it.id == actionProduct.id }
+                                        if (index >= 0) products[index] = actionProduct.copy(
+                                            isActive = action == "restore"
+                                        )
+                                    }
+                                    pendingAction = null
+                                    selectedId = null
+                                    page = Page.List
+                                    reloadProducts++
+                                } catch (error: CancellationException) {
+                                    throw error
+                                } catch (error: Exception) {
+                                    android.util.Log.e("InventoryAction", "Failed to $action product", error)
+                                    actionError = "Couldn't ${action.lowercase()} product. Refresh and try again; check Logcat InventoryAction if it continues."
+                                } finally {
+                                    actionSaving = false
+                                }
+                            }
                         }
-                    ) {
+                    }) { Text(if (actionSaving) "Saving…" else label) }
+                },
+                dismissButton = {
+                    TextButton(enabled = !actionSaving, onClick = { pendingAction = null }) {
                         Text("Cancel")
                     }
                 }
@@ -325,5 +370,5 @@ fun InventoryScreen(
 )
 @Composable
 private fun InventoryScreenPreview() {
-    InventoryScreen()
+    InventoryScreen(userRole = "ADMIN")
 }

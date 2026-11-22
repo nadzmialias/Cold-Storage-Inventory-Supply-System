@@ -1,5 +1,4 @@
 package com.csiss.inventory.ui.temperature
-import com.csiss.inventory.ui.components.OutlineRefreshButton
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -12,8 +11,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import com.csiss.inventory.ui.components.CsissLightRefreshIndicator
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,8 +37,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
-
+import kotlinx.coroutines.CancellationException
 
 // CSISS color palette
 private val Navy = Color(0xFF132945)
@@ -78,6 +76,8 @@ fun TemperatureScreen(
         }
     }
 
+    var initialLoadComplete by remember { mutableStateOf(false) }
+
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -112,33 +112,38 @@ fun TemperatureScreen(
             } else {
                 repository.loadLive()
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
-            snapshot = null
             error = "Unable to retrieve temperature data. " +
                     "Check your connection and login."
         } finally {
             if (requestId == refresh) {
                 loading = false
                 manualRefreshPending = false
+                initialLoadComplete = true
             }
         }
     }
 
     LaunchedEffect(useDemoData) {
-
         if (!useDemoData) {
-
             while (true) {
-
                 delay(20_000L)
 
-                refresh++
+                if (!loading && !manualRefreshPending) {
+                    refresh++
+                }
             }
         }
     }
 
+
+    val showRefreshIndicator =
+        manualRefreshPending || (loading && !initialLoadComplete)
+
     PullToRefreshBox(
-        isRefreshing = manualRefreshPending,
+        isRefreshing = showRefreshIndicator,
         onRefresh = requestRefresh,
         modifier = Modifier
             .fillMaxSize()
@@ -151,16 +156,14 @@ fun TemperatureScreen(
             ),
         state = pullToRefreshState,
         indicator = {
-            PullToRefreshDefaults.Indicator(
-                modifier = Modifier.align(Alignment.TopCenter),
-                isRefreshing = manualRefreshPending,
-                containerColor = Navy,
-                color = Color.White,
-                state = pullToRefreshState
+            CsissLightRefreshIndicator(
+                state = pullToRefreshState,
+                isRefreshing = showRefreshIndicator,
+                modifier = Modifier.align(Alignment.TopCenter)
             )
         }
     ) {
-        Column(
+    Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Background)
@@ -190,13 +193,6 @@ fun TemperatureScreen(
                         fontWeight = FontWeight.SemiBold
                     )
                 }
-
-                // Stable label and button size, with an animated outline on manual refresh.
-                OutlineRefreshButton(
-                    onClick = requestRefresh,
-                    isRefreshing = manualRefreshPending,
-                    enabled = !loading
-                )
             }
 
             snapshot?.let { data ->
@@ -218,18 +214,33 @@ fun TemperatureScreen(
                 }
             }
 
-            if (loading && snapshot == null) {
-                LinearProgressIndicator(
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
             error?.let {
                 Text(
                     it,
                     color = AlertRed,
                     fontSize = 14.sp
                 )
+            }
+
+            if (snapshot == null) {
+                TemperaturePlaceholderHero(isLoading = loading)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    MetricCard(
+                        title = "MINIMUM",
+                        value = "—",
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    MetricCard(
+                        title = "MAXIMUM",
+                        value = "—",
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
 
             snapshot?.let { data ->
@@ -371,6 +382,7 @@ fun TemperatureScreen(
             snapshot?.let { data ->
 
                 EditTemperatureLimitsDialog(
+                    storageName = data.storage.storageName,
                     currentMin = data.storage.minTemperature,
                     currentMax = data.storage.maxTemperature,
                     isSaving = savingLimits,
@@ -543,6 +555,100 @@ private fun TemperatureHero(data: TemperatureSnapshot) {
         )
     }
 }
+
+
+@Composable
+private fun TemperaturePlaceholderHero(
+    isLoading: Boolean
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        Color(0xFF141C43),
+                        Color(0xFF373C85),
+                        Color(0xFF6651A7)
+                    )
+                ),
+                shape = RoundedCornerShape(24.dp)
+            )
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                "Cold Storage",
+                color = Color.White,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                "TEMPERATURE SENSOR",
+                color = Color(0xFFBECBE6),
+                fontSize = 10.sp,
+                letterSpacing = 0.9.sp
+            )
+        }
+
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                "LATEST RECORDED TEMPERATURE",
+                color = Color(0xFFD2DBED),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium
+            )
+
+            Text(
+                "—",
+                color = Color.White,
+                fontSize = 52.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Surface(
+                color = Color.White.copy(alpha = 0.12f),
+                shape = RoundedCornerShape(50.dp)
+            ) {
+                Text(
+                    text = if (isLoading) "LOADING" else "UNAVAILABLE",
+                    modifier = Modifier.padding(
+                        horizontal = 14.dp,
+                        vertical = 8.dp
+                    ),
+                    color = Color(0xFFDAE3EF),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
+        HorizontalDivider(
+            color = Color.White.copy(alpha = 0.16f)
+        )
+
+        Text(
+            text = if (isLoading) {
+                "Retrieving temperature data..."
+            } else {
+                "Temperature data unavailable"
+            },
+            modifier = Modifier.fillMaxWidth(),
+            color = Color(0xFFD2DBED),
+            fontSize = 12.sp,
+            textAlign =
+                androidx.compose.ui.text.style.TextAlign.Center
+        )
+    }
+}
+
 
 // ========================================
 // MINIMUM / MAXIMUM TEMPERATURE CARDS
@@ -771,6 +877,7 @@ private fun formatTime(value: String): String {
 
 @Composable
 private fun EditTemperatureLimitsDialog(
+    storageName: String,
     currentMin: Double,
     currentMax: Double,
     isSaving: Boolean,
@@ -814,8 +921,7 @@ private fun EditTemperatureLimitsDialog(
             ) {
 
                 Text(
-                    "Set the allowed temperature range " +
-                            "for Freezer Room A."
+                    "Set the allowed temperature range for $storageName."
                 )
 
                 OutlinedTextField(

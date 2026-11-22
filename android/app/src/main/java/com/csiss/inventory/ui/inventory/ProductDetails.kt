@@ -14,7 +14,10 @@ import java.time.LocalDate
 
 @Composable
 internal fun ProductDetails(product: Product, today: LocalDate, back: () -> Unit,
-                            edit: () -> Unit, delete: () -> Unit) {
+                            edit: () -> Unit, delete: () -> Unit,
+                            archive: () -> Unit, restore: () -> Unit,
+                            canEditProducts: Boolean, isAdmin: Boolean,
+                            busy: Boolean = false) {
     LazyColumn(contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item { ScreenTitle("Product details", "Product catalogue / PRD-${product.id.toString().padStart(4, '0')}", back) }
         item { ProductCard(product, today) }
@@ -39,14 +42,46 @@ internal fun ProductDetails(product: Product, today: LocalDate, back: () -> Unit
                 }
             }
         }
-        item { PrimaryButton("Edit product", edit) }
-        item {
+        if (product.isActive && canEditProducts) {
+            item {
+                Button(onClick = edit, enabled = !busy,
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Blue)) {
+                    Text("Edit product")
+                }
+            }
+        }
+        if (product.isActive && isAdmin) {
+            item {
+                OutlinedButton(onClick = archive, enabled = product.canArchive && !busy,
+                    modifier = Modifier.fillMaxWidth().height(48.dp), shape = Shape) {
+                    Text("Archive product", fontWeight = FontWeight.SemiBold)
+                }
+                if (!product.canArchive) {
+                    Text("Clear remaining stock before archiving.", color = Muted,
+                        fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                }
+            }
+        } else if (!product.isActive) {
+            item {
+                Text("Archived product", color = Muted, fontWeight = FontWeight.SemiBold)
+                if (isAdmin) Button(onClick = restore, enabled = !busy,
+                    modifier = Modifier.fillMaxWidth().height(48.dp), shape = Shape,
+                    colors = ButtonDefaults.buttonColors(containerColor = Blue)) {
+                    Text("Restore product")
+                }
+            }
+        }
+        if (isAdmin && product.canDelete) item {
             OutlinedButton(
-                onClick = delete, modifier = Modifier.fillMaxWidth().height(48.dp),
+                onClick = delete, enabled = !busy,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, Red.copy(alpha = 0.35f)),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Red)
             ) { Text("Delete product", fontWeight = FontWeight.SemiBold) }
         }
+
     }
 }
 

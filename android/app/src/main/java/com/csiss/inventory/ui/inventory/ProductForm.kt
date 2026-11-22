@@ -27,6 +27,7 @@ import java.util.Locale
 internal fun ProductForm(
     product: Product?,
     back: () -> Unit,
+    isAdmin: Boolean,
     save: (String, CategoryOption, UnitOption, Uri?, Double, String) -> Unit
 ) {
     var name by rememberSaveable(product?.id) { mutableStateOf(product?.name.orEmpty()) }
@@ -82,15 +83,15 @@ internal fun ProductForm(
         }
         item {
             Choice("Category", category, categories.map { it.name }, optionsReady,
-                onAdd = {
+                onAdd = if (isAdmin) ({
                     optionName = ""
                     optionError = ""
                     adding = "category"
-                },
+                }) else null,
                 choose = { category = it }
             )
         }
-        item {
+        if (isAdmin) item {
             Field(
                 minimumStock,
                 { minimumStock = it },
@@ -100,11 +101,11 @@ internal fun ProductForm(
         }
         item {
             Choice("Unit", unit, units.map { it.name }, optionsReady,
-                onAdd = {
+                onAdd = if (isAdmin) ({
                     optionName = ""
                     optionError = ""
                     adding = "unit"
-                },
+                }) else null,
                 choose = { unit = it }
             )
         }
@@ -156,7 +157,11 @@ internal fun ProductForm(
         if (error.isNotEmpty()) item { Text(error, color = Red) }
         item {
             PrimaryButton(if (product == null) "Save product" else "Update product", onClick = {
-                val minimum = minimumStock.trim().replace(',', '.').toDoubleOrNull()
+                val minimum = if (isAdmin) {
+                    minimumStock.trim().replace(',', '.').toDoubleOrNull()
+                } else {
+                    product?.minimum ?: 0.0
+                }
                 val selectedCategory = categories.firstOrNull { it.name.equals(category, ignoreCase = true) }
                 val selectedUnit = units.firstOrNull { it.name.equals(unit, ignoreCase = true) }
                 error = when {
@@ -173,17 +178,21 @@ internal fun ProductForm(
         }
     }
     adding?.let { label ->
-        AlertDialog(
+        InventoryDialog(
             onDismissRequest = { if (!optionSaving) adding = null },
-            title = { Text("Add $label") },
+            title = { Text(if (label == "category") "Add Category" else "Add Unit") },
             text = {
-                Column {
-                    Field(optionName, { optionName = it }, "Name")
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    OutlinedTextField(
+                        value = optionName, onValueChange = { optionName = it },
+                        label = { Text("Name") }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                     if (optionError.isNotEmpty()) Text(optionError, color = Red)
                 }
             },
             confirmButton = {
-                TextButton(enabled = !optionSaving && optionName.isNotBlank(), onClick = {
+                Button(enabled = !optionSaving && optionName.isNotBlank(), onClick = {
                     val newName = optionName.trim()
                     val isCategory = label == "category"
                     optionSaving = true
@@ -218,7 +227,7 @@ private fun Choice(
     value: String,
     options: List<String>,
     enabled: Boolean,
-    onAdd: () -> Unit,
+    onAdd: (() -> Unit)?,
     choose: (String) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -254,14 +263,16 @@ private fun Choice(
                     }
                 )
             }
-            if (options.isNotEmpty()) HorizontalDivider()
-            DropdownMenuItem(
-                text = { Text("+ Add $menuLabel", color = Blue, fontWeight = FontWeight.Medium) },
-                onClick = {
-                    expanded = false
-                    onAdd()
-                }
-            )
+            if (onAdd != null) {
+                if (options.isNotEmpty()) HorizontalDivider()
+                DropdownMenuItem(
+                    text = { Text("+ Add $menuLabel", color = Blue, fontWeight = FontWeight.Medium) },
+                    onClick = {
+                        expanded = false
+                        onAdd()
+                    }
+                )
+            }
         }
     }
 }

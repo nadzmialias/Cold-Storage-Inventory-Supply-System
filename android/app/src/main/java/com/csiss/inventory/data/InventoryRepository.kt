@@ -3,6 +3,7 @@ package com.csiss.inventory.data
 import android.content.ContentResolver
 import android.net.Uri
 import com.csiss.inventory.ui.inventory.Product
+import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.storage.storage
@@ -10,6 +11,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import java.time.LocalDate
 import java.util.Locale
 import java.util.UUID
@@ -36,6 +39,7 @@ private data class NewProductRow(
     @SerialName("category_id") val categoryId: Long,
     @SerialName("unit_id") val unitId: Long,
     @SerialName("min_stock_level") val minimum: Double,
+    @SerialName("is_active") val isActive: Boolean,
     @SerialName("image_path") val imagePath: String? = null
 )
 
@@ -43,6 +47,7 @@ private data class NewProductRow(
 private data class ProductRow(
     @SerialName("product_id") val id: Long,
     @SerialName("product_name") val name: String?,
+    @SerialName("is_active") val isActive: Boolean,
     val category: String?,
     val unit: String?,
     @SerialName("image_path") val imagePath: String? = null,
@@ -56,9 +61,15 @@ private data class ProductRow(
 private data class InventoryBatchRow(
     @SerialName("quantity_remaining") val quantity: Double?,
     @SerialName("expiry_date") val expiry: String?,
+    @SerialName("stock_transactions") val movements: List<InventoryMovementRow> = emptyList(),
     val suppliers: BatchSupplierRow? = null,
     @SerialName("storage_areas")
     val storageArea: BatchStorageRow? = null
+)
+
+@Serializable
+private data class InventoryMovementRow(
+    @SerialName("movement_id") val id: Long
 )
 
 @Serializable
@@ -71,7 +82,7 @@ private data class BatchStorageRow(
     @SerialName("storage_name") val name: String? = null
 )
 
-internal suspend fun loadInventoryProducts(): List<Product> {
+internal suspend fun loadInventoryProducts(active: Boolean? = true): List<Product> {
     val rows = SupabaseClientProvider.client
         .from("products")
         .select(
@@ -79,6 +90,7 @@ internal suspend fun loadInventoryProducts(): List<Product> {
                 """
                 product_id,
                 product_name,
+                is_active,
                 category,
                 unit,
                 min_stock_level,
@@ -87,6 +99,7 @@ internal suspend fun loadInventoryProducts(): List<Product> {
                 inventory_batches(
                     quantity_remaining,
                     expiry_date,
+                    stock_transactions(movement_id),
                     suppliers(supplier_name),
                     storage_areas(storage_name)
                 )
@@ -94,7 +107,7 @@ internal suspend fun loadInventoryProducts(): List<Product> {
             )
         ) {
             filter {
-                eq("is_active", true)
+                if (active != null) eq("is_active", active)
             }
         }
         .decodeList<ProductRow>()
@@ -106,6 +119,9 @@ internal suspend fun loadInventoryProducts(): List<Product> {
 
         Product(
             id = row.id,
+            isActive = row.isActive,
+            hasBatches = row.batches.isNotEmpty(),
+            hasHistory = row.batches.any { it.movements.isNotEmpty() },
             name = row.name.orEmpty().ifBlank {
                 "Unnamed product"
             },
@@ -187,6 +203,7 @@ internal suspend fun insertInventoryProduct(
                 categoryId = category.id,
                 unitId = unit.id,
                 minimum = minimum,
+                isActive = true,
                 imagePath = imagePath
             )
         )
@@ -226,9 +243,12 @@ internal suspend fun addInventoryOption(
         .insert(mapOf(column to name))
 }
 
-internal suspend fun updateInventoryMinimum(
+internal suspend fun updateInventoryProduct(
     productId: Long,
-    minimum: Double,
+    name: String,
+    category: CategoryOption,
+    unit: UnitOption,
+    minimum: Double?,
     description: String,
     resolver: ContentResolver,
     photo: Uri?
@@ -240,7 +260,12 @@ internal suspend fun updateInventoryMinimum(
     val updatedRows = SupabaseClientProvider.client
         .from("products")
         .update({
-            set("min_stock_level", minimum)
+            set("product_name", name)
+            set("category", category.name)
+            set("category_id", category.id)
+            set("unit", unit.name)
+            set("unit_id", unit.id)
+            if (minimum != null) set("min_stock_level", minimum)
             set("description", description)
 
             if (newImagePath != null) {
@@ -278,3 +303,15 @@ private data class UpdatedProductRow(
     val description: String? = null,
     @SerialName("image_path") val imagePath: String? = null
 )
+
+internal suspend fun changeInventoryProductState(productId: Long, action: String) {
+    require(action in setOf("archive", "restore", "delete"))
+
+    SupabaseClientProvider.client.postgrest.rpc(
+        function = "csiss_inventory_product_action",
+        parameters = buildJsonObject {
+            put("p_product_id", JsonPrimitive(productId))
+            put("p_action", JsonPrimitive(action))
+        }
+    )
+}
