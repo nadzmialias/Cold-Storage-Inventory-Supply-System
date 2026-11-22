@@ -5,8 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.material3.ExperimentalMaterial3Api
+import com.csiss.inventory.ui.components.CsissLightRefreshIndicator
 import androidx.compose.ui.Alignment
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -132,19 +133,17 @@ fun SupplierScreen(
                 when (page) {
                     SupplierPage.List -> {
                         PullToRefreshBox(
-                            isRefreshing = manualRefreshPending,
+                            isRefreshing = isRefreshing,
                             onRefresh = requestRefresh,
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(Background),
                             state = pullToRefreshState,
                             indicator = {
-                                PullToRefreshDefaults.Indicator(
-                                    modifier = Modifier.align(Alignment.TopCenter),
-                                    isRefreshing = manualRefreshPending,
-                                    containerColor = Blue,
-                                    color = White,
-                                    state = pullToRefreshState
+                                CsissLightRefreshIndicator(
+                                    state = pullToRefreshState,
+                                    isRefreshing = isRefreshing,
+                                    modifier = Modifier.align(Alignment.TopCenter)
                                 )
                             }
                         ) {

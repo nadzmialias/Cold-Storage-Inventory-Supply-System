@@ -11,6 +11,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import com.csiss.inventory.ui.components.CsissLightRefreshIndicator
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -62,6 +65,7 @@ fun UserManagementScreen(
         }
         error = null
     }
+    val pullToRefreshState = rememberPullToRefreshState()
 
     BackHandler(enabled = page != "list", onBack = back)
 
@@ -120,18 +124,20 @@ fun UserManagementScreen(
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            if (saving) {
-                LinearProgressIndicator(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = Navy
-                )
-            }
             when (page) {
                 "list" -> {
                     PullToRefreshBox(
-                        isRefreshing = loading && loadedOnce,
+                        isRefreshing = loading,
                         onRefresh = refresh,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize(),
+                        state = pullToRefreshState,
+                        indicator = {
+                            CsissLightRefreshIndicator(
+                                state = pullToRefreshState,
+                                isRefreshing = loading,
+                                modifier = Modifier.align(Alignment.TopCenter)
+                            )
+                        }
                     ) {
                         val filtered = users.filter { user ->
                             val matchesSearch =
@@ -177,12 +183,6 @@ fun UserManagementScreen(
                                             fontWeight = FontWeight.SemiBold
                                         )
                                     }
-
-                                    OutlineRefreshButton(
-                                        onClick = refresh,
-                                        isRefreshing = loading,
-                                        enabled = !loading
-                                    )
                                 }
                             }
 
@@ -244,23 +244,21 @@ fun UserManagementScreen(
                                 )
                             }
 
-                            if (loading && !loadedOnce) {
-                                item {
-                                    CircularProgressIndicator(color = Navy)
-                                }
-                            } else if (filtered.isEmpty()) {
-                                item {
-                                    Text(
-                                        if (!loadedOnce) "No user data available."
-                                        else "No users found.",
-                                        color = Muted
-                                    )
-                                }
-                            } else {
-                                items(filtered, key = { it.id }) { user ->
-                                    UserCard(user) {
-                                        selectedId = user.id
-                                        page = "details"
+                            if (!loading || loadedOnce) {
+                                if (filtered.isEmpty()) {
+                                    item {
+                                        Text(
+                                            if (!loadedOnce) "No user data available."
+                                            else "No users found.",
+                                            color = Muted
+                                        )
+                                    }
+                                } else {
+                                    items(filtered, key = { it.id }) { user ->
+                                        UserCard(user) {
+                                            selectedId = user.id
+                                            page = "details"
+                                        }
                                     }
                                 }
                             }
@@ -776,10 +774,20 @@ private fun UserForm(
                     containerColor = Navy
                 )
             ) {
-                Text(
-                    if (isEditing) "Update User"
-                    else "Send Invitation"
-                )
+
+                if (saving) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text(
+                        if (isEditing) "Update User"
+                        else "Send Invitation"
+                    )
+                }
+
             }
         }
 

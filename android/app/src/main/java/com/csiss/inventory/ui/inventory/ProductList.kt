@@ -6,7 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import com.csiss.inventory.ui.components.CsissLightRefreshIndicator
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -68,22 +68,24 @@ internal fun ProductList(
 
     val pullToRefreshState = rememberPullToRefreshState()
 
+
     PullToRefreshBox(
         isRefreshing = isRefreshing,
-        onRefresh = { if (!isRefreshing) onRefresh() },
+        onRefresh = {
+            if (!isRefreshing) onRefresh()
+        },
         modifier = Modifier.fillMaxSize(),
         state = pullToRefreshState,
         indicator = {
-            PullToRefreshDefaults.Indicator(
-                modifier = Modifier.align(Alignment.TopCenter),
+            CsissLightRefreshIndicator(
+                state = pullToRefreshState,
                 isRefreshing = isRefreshing,
-                containerColor = Blue,
-                color = Color.White,
-                state = pullToRefreshState
+                modifier = Modifier.align(Alignment.TopCenter)
             )
         }
     ) {
-        LazyColumn(
+
+    LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -102,13 +104,6 @@ internal fun ProductList(
                         color = Ink,
                         fontSize = 26.sp,
                         fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-            if (isRefreshing && products.isEmpty()) {
-                item {
-                    LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }

@@ -113,16 +113,6 @@ internal fun SupplierList(
             )
         }
 
-        if (isRefreshing) {
-            item {
-                LinearProgressIndicator(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = Color(0xFF6D28D9),
-                    trackColor = Color(0xFFE8DDF8)
-                )
-            }
-        }
-
         // Section header
         item {
             Text(

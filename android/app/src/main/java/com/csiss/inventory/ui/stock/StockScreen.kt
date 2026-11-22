@@ -8,8 +8,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.material3.ExperimentalMaterial3Api
+import com.csiss.inventory.ui.components.CsissLightRefreshIndicator
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,7 +60,6 @@ fun StockScreen() {
     var showStockInDialog by remember { mutableStateOf(false) }
     var batchForStockOut by remember { mutableStateOf<EnrichedBatch?>(null) }
 
-
     LaunchedEffect(refreshTrigger) {
         loading = true
         error = null
@@ -75,19 +75,17 @@ fun StockScreen() {
 
 
     PullToRefreshBox(
-        isRefreshing = manualRefreshPending,
+        isRefreshing = loading,
         onRefresh = requestRefresh,
         modifier = Modifier
             .fillMaxSize()
             .background(Background),
         state = pullToRefreshState,
         indicator = {
-            PullToRefreshDefaults.Indicator(
-                modifier = Modifier.align(Alignment.TopCenter),
-                isRefreshing = manualRefreshPending,
-                containerColor = Navy,
-                color = Color.White,
-                state = pullToRefreshState
+            CsissLightRefreshIndicator(
+                state = pullToRefreshState,
+                isRefreshing = loading,
+                modifier = Modifier.align(Alignment.TopCenter)
             )
         }
     ) {
@@ -198,10 +196,6 @@ fun StockScreen() {
                     modifier = Modifier.weight(1f)
                 )
             }
-        }
-
-        if (loading && snapshot == null) {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         }
 
         error?.let {

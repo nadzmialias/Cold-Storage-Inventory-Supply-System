@@ -7,7 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import com.csiss.inventory.ui.components.CsissLightRefreshIndicator
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -90,24 +90,26 @@ fun NotificationScreen(
         }
     }
 
+
+
     PullToRefreshBox(
-        isRefreshing = manualRefreshPending,
+        isRefreshing = loading,
         onRefresh = requestRefresh,
         modifier = Modifier
             .fillMaxSize()
             .background(Background),
         state = pullToRefreshState,
         indicator = {
-            PullToRefreshDefaults.Indicator(
-                modifier = Modifier.align(Alignment.TopCenter),
-                isRefreshing = manualRefreshPending,
-                containerColor = Navy,
-                color = Color.White,
-                state = pullToRefreshState
+            CsissLightRefreshIndicator(
+                state = pullToRefreshState,
+                isRefreshing = loading,
+                modifier = Modifier.align(Alignment.TopCenter)
             )
         }
     ) {
-        Column(
+
+
+    Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Background)
@@ -181,10 +183,6 @@ fun NotificationScreen(
                     modifier = Modifier.weight(1f)
                 )
             }
-        }
-
-        if (loading && alerts.isEmpty()) {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         }
 
         error?.let {
