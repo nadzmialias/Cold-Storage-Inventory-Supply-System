@@ -11,12 +11,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
-import androidx.compose.material3.ExperimentalMaterial3Api
 import com.csiss.inventory.ui.components.CsissLightRefreshIndicator
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import com.csiss.inventory.ui.components.CsissLightRefreshIndicator
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,8 +37,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
-
+import kotlinx.coroutines.CancellationException
 
 // CSISS color palette
 private val Navy = Color(0xFF132945)
@@ -80,6 +76,9 @@ fun TemperatureScreen(
         }
     }
 
+    var initialLoadComplete by remember { mutableStateOf(false) }
+
+
     LaunchedEffect(Unit) {
         while (true) {
             delay(30_000L)
@@ -113,6 +112,8 @@ fun TemperatureScreen(
             } else {
                 repository.loadLive()
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             error = "Unable to retrieve temperature data. " +
                     "Check your connection and login."
@@ -120,25 +121,29 @@ fun TemperatureScreen(
             if (requestId == refresh) {
                 loading = false
                 manualRefreshPending = false
+                initialLoadComplete = true
             }
         }
     }
 
     LaunchedEffect(useDemoData) {
-
         if (!useDemoData) {
-
             while (true) {
-
                 delay(20_000L)
 
-                refresh++
+                if (!loading && !manualRefreshPending) {
+                    refresh++
+                }
             }
         }
     }
 
+
+    val showRefreshIndicator =
+        manualRefreshPending || (loading && !initialLoadComplete)
+
     PullToRefreshBox(
-        isRefreshing = loading,
+        isRefreshing = showRefreshIndicator,
         onRefresh = requestRefresh,
         modifier = Modifier
             .fillMaxSize()
@@ -153,7 +158,7 @@ fun TemperatureScreen(
         indicator = {
             CsissLightRefreshIndicator(
                 state = pullToRefreshState,
-                isRefreshing = loading,
+                isRefreshing = showRefreshIndicator,
                 modifier = Modifier.align(Alignment.TopCenter)
             )
         }
@@ -377,6 +382,7 @@ fun TemperatureScreen(
             snapshot?.let { data ->
 
                 EditTemperatureLimitsDialog(
+                    storageName = data.storage.storageName,
                     currentMin = data.storage.minTemperature,
                     currentMax = data.storage.maxTemperature,
                     isSaving = savingLimits,
@@ -871,6 +877,7 @@ private fun formatTime(value: String): String {
 
 @Composable
 private fun EditTemperatureLimitsDialog(
+    storageName: String,
     currentMin: Double,
     currentMax: Double,
     isSaving: Boolean,
@@ -914,8 +921,7 @@ private fun EditTemperatureLimitsDialog(
             ) {
 
                 Text(
-                    "Set the allowed temperature range " +
-                            "for Freezer Room A."
+                    "Set the allowed temperature range for $storageName."
                 )
 
                 OutlinedTextField(
