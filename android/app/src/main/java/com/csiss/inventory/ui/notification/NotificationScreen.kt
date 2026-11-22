@@ -355,7 +355,8 @@ private fun AlertCard(
 ) {
     val typeColor = when {
         alert.alertType.uppercase().contains("STOCK") ||
-                alert.alertType.uppercase().contains("TEMP") -> AlertRed
+                alert.alertType.uppercase().contains("TEMP") ||
+                alert.alertType.uppercase() == "SENSOR_OFFLINE" -> AlertRed
         alert.alertType.uppercase().contains("EXPIR") -> WarningOrange
         else -> IceBlue
     }

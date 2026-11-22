@@ -39,7 +39,7 @@ data class SystemAlertRow(
     val isTempRelated: Boolean
         get() {
             val t = alertType.uppercase(Locale.ROOT)
-            return temperatureLogId != null || t.contains("TEMP")
+            return temperatureLogId != null || t.contains("TEMP") || t == "SENSOR_OFFLINE"
         }
 }
 

@@ -288,7 +288,6 @@ class MainActivity : ComponentActivity() {
                                 when (selectedTab) {
                                     0 -> StockScreen()
                                     1 -> TemperatureScreen(
-                                        useDemoData = false,
                                         canEditLimits = currentUser.role == "ADMIN",
                                         onOpenAlerts = {
                                             alertsFilter = 2

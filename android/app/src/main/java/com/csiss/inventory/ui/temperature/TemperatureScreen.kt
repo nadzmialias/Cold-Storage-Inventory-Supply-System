@@ -51,8 +51,7 @@ private val NormalGreen = Color(0xFF159C76)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TemperatureScreen(
-    useDemoData: Boolean = false,
-    canEditLimits: Boolean = useDemoData,
+    canEditLimits: Boolean = false,
     onOpenAlerts: () -> Unit = {}
 ) {
     val repository = remember { TemperatureRepository() }
@@ -66,8 +65,6 @@ fun TemperatureScreen(
     var showLimitEditor by remember { mutableStateOf(false) }
     var savingLimits by remember { mutableStateOf(false) }
     var limitSaveError by remember { mutableStateOf<String?>(null) }
-    var demoMinOverride by remember { mutableStateOf<Double?>(null) }
-    var demoMaxOverride by remember { mutableStateOf<Double?>(null) }
     val pullToRefreshState = rememberPullToRefreshState()
     val requestRefresh: () -> Unit = {
         if (!loading && !manualRefreshPending) {
@@ -86,34 +83,14 @@ fun TemperatureScreen(
         }
     }
 
-    LaunchedEffect(useDemoData, refresh) {
+    LaunchedEffect(refresh) {
         val requestId = refresh
         loading = true
-        error = null
         try {
-            snapshot = if (useDemoData) {
-                val demo = repository.loadDemo()
-
-                val savedMin = demoMinOverride
-                val savedMax = demoMaxOverride
-
-                val adjustedDemo =
-                    if (savedMin != null && savedMax != null) {
-                        demo.copy(
-                            storage = demo.storage.copy(
-                                minTemperature = savedMin,
-                                maxTemperature = savedMax
-                            )
-                        )
-                    } else {
-                        demo
-                    }
-                adjustedDemo
-            } else {
-                repository.loadLive()
-            }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
+            snapshot = repository.loadLive()
+            error = null
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             error = "Unable to retrieve temperature data. " +
                     "Check your connection and login."
@@ -121,20 +98,14 @@ fun TemperatureScreen(
             if (requestId == refresh) {
                 loading = false
                 manualRefreshPending = false
-                initialLoadComplete = true
             }
         }
     }
 
-    LaunchedEffect(useDemoData) {
-        if (!useDemoData) {
-            while (true) {
-                delay(20_000L)
-
-                if (!loading && !manualRefreshPending) {
-                    refresh++
-                }
-            }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(20_000L)
+            refresh++
         }
     }
 
@@ -203,7 +174,8 @@ fun TemperatureScreen(
                 ) {
                     SensorConnectionIndicator(
                         lastReadingAt = data.logs.firstOrNull()?.recordedAt,
-                        currentTime = currentTime
+                        currentTime = currentTime,
+                        serverReachable = error == null
                     )
                     AlertsStatusButton(
                         alertCount = data.alerts.count { alert ->
@@ -394,49 +366,25 @@ fun TemperatureScreen(
                     },
 
                     onSave = { newMin, newMax ->
+                        scope.launch {
+                            savingLimits = true
+                            limitSaveError = null
 
-                        if (useDemoData) {
-
-                            // Save inside demo UI state
-                            demoMinOverride = newMin
-                            demoMaxOverride = newMax
-
-                            snapshot = snapshot?.copy(
-                                storage = data.storage.copy(
-                                    minTemperature = newMin,
-                                    maxTemperature = newMax
+                            try {
+                                val updatedStorage = repository.updateLimits(
+                                    storageId = data.storage.storageId,
+                                    minimum = newMin,
+                                    maximum = newMax
                                 )
-                            )
 
-                            showLimitEditor = false
-
-                        } else {
-
-                            scope.launch {
-                                savingLimits = true
-                                limitSaveError = null
-
-                                try {
-                                    val updatedStorage =
-                                        repository.updateLimits(
-                                            storageId = data.storage.storageId,
-                                            minimum = newMin,
-                                            maximum = newMax
-                                        )
-
-                                    snapshot = snapshot?.copy(
-                                        storage = updatedStorage
-                                    )
-
-                                    showLimitEditor = false
-
-                                } catch (e: Exception) {
-                                    limitSaveError =
-                                        "Unable to save limits. " +
-                                                "Check your Admin login and permissions."
-                                } finally {
-                                    savingLimits = false
-                                }
+                                snapshot = snapshot?.copy(storage = updatedStorage)
+                                showLimitEditor = false
+                            } catch (e: Exception) {
+                                limitSaveError =
+                                    "Unable to save limits. " +
+                                            "Check your Admin login and permissions."
+                            } finally {
+                                savingLimits = false
                             }
                         }
                     }
@@ -996,7 +944,8 @@ private fun EditTemperatureLimitsDialog(
 @Composable
 private fun SensorConnectionIndicator(
     lastReadingAt: String?,
-    currentTime: Instant
+    currentTime: Instant,
+    serverReachable: Boolean
 ) {
     val lastReading = lastReadingAt?.let {
         runCatching { OffsetDateTime.parse(it).toInstant() }.getOrNull()
@@ -1005,11 +954,19 @@ private fun SensorConnectionIndicator(
         Duration.between(it, currentTime).seconds
     }
     // A recent reading is evidence of connection; allow modest clock skew.
-    val connected = secondsSinceReading != null &&
-        secondsSinceReading in -120L..180L
-    val statusColor = if (connected) NormalGreen else AlertRed
-    val statusLabel = if (connected) "ESP32 Connected" else "ESP32 Offline"
-
+    val connected = serverReachable &&
+            secondsSinceReading != null &&
+            secondsSinceReading in -120L..180L
+    val statusColor = when {
+        !serverReachable -> TextMuted
+        connected -> NormalGreen
+        else -> AlertRed
+    }
+    val statusLabel = when {
+        !serverReachable -> "Can't reach server"
+        connected -> "ESP32 Connected"
+        else -> "ESP32 Offline"
+    }
     Surface(
         modifier = Modifier.semantics {
             contentDescription = "Sensor status: $statusLabel"

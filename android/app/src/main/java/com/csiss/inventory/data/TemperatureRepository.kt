@@ -6,7 +6,6 @@ import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.time.Instant
 
 // =====================================
 // 1. STORAGE AREA MODEL
@@ -100,10 +99,19 @@ class TemperatureRepository {
                 )
             ) {
                 filter {
-                    eq("storage_id", 1L)
+                    eq("is_active", true)
                 }
+
+                order(
+                    column = "storage_id",
+                    order = Order.ASCENDING
+                )
+
+                limit(1)
             }
-            .decodeSingle<StorageArea>()
+            .decodeList<StorageArea>()
+            .firstOrNull()
+            ?: error("No active storage area is set up.")
 
         // ==========================================
         // 2. FETCH LATEST TEMPERATURE READINGS
@@ -278,68 +286,4 @@ class TemperatureRepository {
                         "It may have changed or you may lack permission."
             )
     }
-
-
-
-    // DEMO DATA FOR UI DEVELOPMENT
-    fun loadDemo(): TemperatureSnapshot {
-
-        val storage = StorageArea(
-            storageId = 1,
-            storageName = "Freezer Room A",
-            minTemperature = -25.0,
-            maxTemperature = -18.0
-        )
-
-        val demoNow = Instant.now().minusSeconds(60)
-
-        // Sample readings, newest first.
-        val logs = listOf(
-            TemperatureLog(
-                logId = 4,
-                temperature = -16.5,
-                recordedAt = demoNow.toString(),
-                minLimit = -25.0,
-                maxLimit = -18.0
-            ),
-            TemperatureLog(
-                logId = 3,
-                temperature = -20.5,
-                recordedAt = demoNow.minusSeconds(60).toString(),
-                minLimit = -25.0,
-                maxLimit = -18.0
-            ),
-            TemperatureLog(
-                logId = 2,
-                temperature = -19.8,
-                recordedAt = demoNow.minusSeconds(120).toString(),
-                minLimit = -25.0,
-                maxLimit = -18.0
-            ),
-            TemperatureLog(
-                logId = 1,
-                temperature = -21.0,
-                recordedAt = demoNow.minusSeconds(180).toString(),
-                minLimit = -25.0,
-                maxLimit = -18.0
-            )
-        )
-        val alerts = listOf(
-            TemperatureAlert(
-                alertId = 1,
-                title = "Abnormal Temperature",
-                message = "Temperature -16.5°C exceeds " +
-                        "the maximum limit of -18°C.",
-                status = "OPEN",
-                createdAt = demoNow.toString()
-            )
-        )
-
-        return TemperatureSnapshot(
-            storage = storage,
-            logs = logs,
-            alerts = alerts
-        )
-    }
-
 }
