@@ -269,18 +269,33 @@ fun SupplierScreen(
         if (toggleDialog && selected != null) {
             val targetStatus = !selected.isActive
             val actionName = if (targetStatus) "activate" else "deactivate"
+            var isToggling by remember { mutableStateOf(false) }
+            var toggleError by remember { mutableStateOf("") }
+
             AlertDialog(
-                onDismissRequest = { toggleDialog = false },
+                onDismissRequest = { if (!isToggling) toggleDialog = false },
                 title = { Text(if (targetStatus) "Activate Supplier" else "Deactivate Supplier") },
                 text = {
-                    Text("Are you sure you want to $actionName \"${selected.name}\"?")
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Are you sure you want to $actionName \"${selected.name}\"?")
+                        if (toggleError.isNotEmpty()) {
+                            Text(
+                                text = toggleError,
+                                color = Red,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
                 },
                 confirmButton = {
                     Button(
+                        enabled = !isToggling,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (targetStatus) Color(0xFF059669) else Color(0xFFF59E0B)
                         ),
                         onClick = {
+                            isToggling = true
+                            toggleError = ""
                             scope.launch {
                                 try {
                                     setSupplierActiveData(selected.id, targetStatus)
@@ -289,17 +304,25 @@ fun SupplierScreen(
                                         suppliers[index] = selected.copy(isActive = targetStatus)
                                     }
                                     toggleDialog = false
+                                } catch (e: CancellationException) {
+                                    throw e
                                 } catch (e: Exception) {
                                     android.util.Log.e("SupplierToggle", "Error", e)
+                                    toggleError = e.localizedMessage ?: "Failed to update status."
+                                } finally {
+                                    isToggling = false
                                 }
                             }
                         }
                     ) {
-                        Text("Confirm")
+                        Text(if (isToggling) "Updating..." else "Confirm")
                     }
                 },
                 dismissButton = {
-                    OutlinedButton(onClick = { toggleDialog = false }) {
+                    OutlinedButton(
+                        enabled = !isToggling,
+                        onClick = { toggleDialog = false }
+                    ) {
                         Text("Cancel")
                     }
                 }
