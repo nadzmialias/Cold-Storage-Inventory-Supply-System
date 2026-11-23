@@ -1,4 +1,3 @@
-
 package com.csiss.inventory.data
 
 import com.csiss.inventory.BuildConfig
@@ -8,11 +7,13 @@ import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.*
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 @Serializable
 data class ManagedUser(
@@ -51,35 +52,38 @@ private data class UserResponse(
 )
 
 class UserManagementRepository {
-    private val http = HttpClient(OkHttp)
-    private val json = Json { ignoreUnknownKeys = true }
 
-    private suspend fun request(body: UserRequest): UserResponse {
+    companion object {
+        // Shared singleton client prevents OkHttp thread/connection leaks per screen visit
+        private val sharedHttp by lazy { HttpClient(OkHttp) }
+        private val sharedJson = Json { ignoreUnknownKeys = true }
+    }
+
+    private suspend fun request(body: UserRequest): UserResponse = withContext(Dispatchers.IO) {
         val token = SupabaseClientProvider.client.auth
             .currentSessionOrNull()
             ?.accessToken
             ?: error("Please sign in again.")
 
-        val response = http.post(
+        val response = sharedHttp.post(
             "${BuildConfig.SUPABASE_URL.trimEnd('/')}/functions/v1/manage-users"
         ) {
             header("apikey", BuildConfig.SUPABASE_PUBLISHABLE_KEY)
             bearerAuth(token)
             contentType(ContentType.Application.Json)
-            setBody(json.encodeToString(body))
+            setBody(sharedJson.encodeToString(body))
         }
 
         val text = response.bodyAsText()
-
         val result = runCatching {
-            json.decodeFromString<UserResponse>(text)
+            sharedJson.decodeFromString<UserResponse>(text)
         }.getOrNull()
 
         if (response.status.value !in 200..299) {
             error(result?.message ?: "User operation failed.")
         }
 
-        return result ?: error("Invalid server response.")
+        result ?: error("Invalid server response.")
     }
 
     suspend fun loadUsers(): List<ManagedUser> =
@@ -119,5 +123,3 @@ class UserManagementRepository {
         )
     }
 }
-
-

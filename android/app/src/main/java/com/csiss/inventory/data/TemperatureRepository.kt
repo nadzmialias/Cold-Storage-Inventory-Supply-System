@@ -1,9 +1,12 @@
-
 package com.csiss.inventory.data
 
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -86,12 +89,7 @@ class TemperatureRepository {
     private val client
         get() = SupabaseClientProvider.client
 
-    suspend fun loadLive(): TemperatureSnapshot {
-
-        // ==========================================
-        // 1. FETCH STORAGE AREA
-        // ==========================================
-
+    suspend fun loadLive(): TemperatureSnapshot = withContext(Dispatchers.IO) {
         val storage = client.from("storage_areas")
             .select(
                 columns = Columns.raw(
@@ -101,93 +99,78 @@ class TemperatureRepository {
                 filter {
                     eq("is_active", true)
                 }
-
                 order(
                     column = "storage_id",
                     order = Order.ASCENDING
                 )
-
                 limit(1)
             }
             .decodeList<StorageArea>()
             .firstOrNull()
             ?: error("No active storage area is set up.")
 
-        // ==========================================
-        // 2. FETCH LATEST TEMPERATURE READINGS
-        // ==========================================
-
-        val logs = client.from("temperature_logs")
-            .select(
-                columns = Columns.raw(
-                    "log_id,temperature,recorded_at," +
-                            "min_limit_at_reading,max_limit_at_reading"
-                )
-            ) {
-                filter {
-                    eq("storage_id", storage.storageId)
-                }
-
-                order(
-                    column = "recorded_at",
-                    order = Order.DESCENDING
-                )
-
-                limit(20)
+        coroutineScope {
+            val logsDeferred = async {
+                client.from("temperature_logs")
+                    .select(
+                        columns = Columns.raw(
+                            "log_id,temperature,recorded_at," +
+                                "min_limit_at_reading,max_limit_at_reading"
+                        )
+                    ) {
+                        filter {
+                            eq("storage_id", storage.storageId)
+                        }
+                        order(
+                            column = "recorded_at",
+                            order = Order.DESCENDING
+                        )
+                        limit(20)
+                    }
+                    .decodeList<TemperatureLog>()
             }
-            .decodeList<TemperatureLog>()
 
-        // ==========================================
-        // 3. FETCH TEMPERATURE ALERTS
-        // ==========================================
-
-        val alerts = client.from("system_alerts")
-            .select(
-                columns = Columns.raw(
-                    "alert_id,title,message,status,created_at"
-                )
-            ) {
-                filter {
-                    eq("alert_type", "TEMP_OUT_OF_RANGE")
-                }
-
-                order(
-                    column = "created_at",
-                    order = Order.DESCENDING
-                )
-
-                limit(100)
+            val alertsDeferred = async {
+                client.from("system_alerts")
+                    .select(
+                        columns = Columns.raw(
+                            "alert_id,title,message,status,created_at"
+                        )
+                    ) {
+                        filter {
+                            eq("alert_type", "TEMP_OUT_OF_RANGE")
+                        }
+                        order(
+                            column = "created_at",
+                            order = Order.DESCENDING
+                        )
+                        limit(100)
+                    }
+                    .decodeList<TemperatureAlert>()
             }
-            .decodeList<TemperatureAlert>()
 
-        // ==========================================
-        // 4. RETURN LIVE DATA
-        // ==========================================
-
-        return TemperatureSnapshot(
-            storage = storage,
-            logs = logs,
-            alerts = alerts
-        )
+            TemperatureSnapshot(
+                storage = storage,
+                logs = logsDeferred.await(),
+                alerts = alertsDeferred.await()
+            )
+        }
     }
 
-
-    //UPDATE TEMP LIMIT
     suspend fun updateLimits(
         storageId: Long,
         minimum: Double,
         maximum: Double
-    ): StorageArea {
-
+    ): StorageArea = withContext(Dispatchers.IO) {
         require(
             minimum.isFinite() &&
-                    maximum.isFinite() &&
-                    minimum < maximum
+                maximum.isFinite() &&
+                minimum < maximum
         ) {
             "Invalid temperature limits"
         }
 
-        return client.from("storage_areas")
+        client.from("storage_areas")
             .update(
                 {
                     set("min_temperature", minimum)
@@ -199,91 +182,10 @@ class TemperatureRepository {
                         "storage_id,storage_name,min_temperature,max_temperature"
                     )
                 )
-
                 filter {
                     eq("storage_id", storageId)
                 }
             }
             .decodeSingle<StorageArea>()
-    }
-
-
-    private suspend fun loadAllAlerts(): List<TemperatureAlert> {
-        val allAlerts = mutableListOf<TemperatureAlert>()
-        val pageSize = 200L
-        var start = 0L
-
-        while (true) {
-            val page = client.from("system_alerts")
-                .select(
-                    columns = Columns.raw(
-                        "alert_id,title,message,status,created_at"
-                    )
-                ) {
-                    filter {
-                        eq("alert_type", "TEMP_OUT_OF_RANGE")
-                    }
-
-                    order(
-                        "created_at",
-                        Order.DESCENDING
-                    )
-
-                    range(start..(start + pageSize - 1))
-                }
-                .decodeList<TemperatureAlert>()
-
-            allAlerts.addAll(page)
-
-            if (page.size < pageSize.toInt()) {
-                break
-            }
-
-            start += pageSize
-        }
-
-        return allAlerts
-    }
-
-
-    suspend fun updateAlertStatus(
-        alertId: Long,
-        newStatus: String
-    ): TemperatureAlert {
-
-        // Determine which transition is allowed.
-        val expectedStatus = when (newStatus) {
-            "ACKNOWLEDGED" -> "OPEN"
-            "RESOLVED" -> "ACKNOWLEDGED"
-            else -> throw IllegalArgumentException(
-                "Invalid alert status"
-            )
-        }
-
-        val updatedAlerts = client.from("system_alerts")
-            .update(
-                {
-                    set("status", newStatus)
-                }
-            ) {
-                select(
-                    columns = Columns.raw(
-                        "alert_id,title,message,status,created_at"
-                    )
-                )
-
-                filter {
-                    eq("alert_id", alertId)
-                    eq("alert_type", "TEMP_OUT_OF_RANGE")
-                    eq("status", expectedStatus)
-                }
-            }
-            .decodeList<TemperatureAlert>()
-
-        return updatedAlerts.singleOrNull()
-            ?: error(
-                "Alert could not be updated. " +
-                        "It may have changed or you may lack permission."
-            )
     }
 }

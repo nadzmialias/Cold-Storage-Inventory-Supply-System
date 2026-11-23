@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.csiss.inventory.data.TemperatureRepository
 import com.csiss.inventory.data.TemperatureSnapshot
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -11,9 +13,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Instant
-import kotlin.coroutines.cancellation.CancellationException
 
-// A data class to hold the entire UI state
 data class TemperatureUiState(
     val snapshot: TemperatureSnapshot? = null,
     val isLoading: Boolean = true,
@@ -32,40 +32,45 @@ class TemperatureViewModel(
     private val _uiState = MutableStateFlow(TemperatureUiState())
     val uiState: StateFlow<TemperatureUiState> = _uiState.asStateFlow()
 
+    private var pollingJob: Job? = null
+    private var timeUpdaterJob: Job? = null
+
     init {
-        // Start the periodic current time updater
-        startTimeUpdater()
-        
-        // Load initial data
         refreshData()
-        
-        // Start periodic auto-refresh (every 20 seconds)
-        startPeriodicRefresh()
     }
 
-    private fun startTimeUpdater() {
-        viewModelScope.launch {
-            while (true) {
-                delay(30_000L)
-                _uiState.update { it.copy(currentTime = Instant.now()) }
-            }
-        }
-    }
-
-    private fun startPeriodicRefresh() {
-        viewModelScope.launch {
-            while (true) {
-                delay(20_000L)
-                // Only auto-refresh if we aren't already loading and no manual refresh is pending
-                if (!_uiState.value.isLoading && !_uiState.value.manualRefreshPending) {
-                   fetchTemperatureData()
+    fun setPollingActive(active: Boolean) {
+        if (active) {
+            if (timeUpdaterJob?.isActive != true) {
+                timeUpdaterJob = viewModelScope.launch {
+                    while (true) {
+                        delay(30_000L)
+                        _uiState.update { it.copy(currentTime = Instant.now()) }
+                    }
                 }
             }
+            if (pollingJob?.isActive != true) {
+                pollingJob = viewModelScope.launch {
+                    while (true) {
+                        delay(20_000L)
+                        val state = _uiState.value
+                        if (!state.isLoading && !state.manualRefreshPending) {
+                            fetchTemperatureData()
+                        }
+                    }
+                }
+            }
+        } else {
+            pollingJob?.cancel()
+            pollingJob = null
+            timeUpdaterJob?.cancel()
+            timeUpdaterJob = null
         }
     }
 
     fun requestManualRefresh() {
-        if (!_uiState.value.isLoading && !_uiState.value.manualRefreshPending) {
+        val state = _uiState.value
+        if (!state.isLoading && !state.manualRefreshPending) {
             _uiState.update { it.copy(manualRefreshPending = true, isLoading = true) }
             fetchTemperatureData()
         }
@@ -80,24 +85,25 @@ class TemperatureViewModel(
         viewModelScope.launch {
             try {
                 val data = repository.loadLive()
-                _uiState.update { 
+                _uiState.update {
                     it.copy(
-                        snapshot = data, 
+                        snapshot = data,
                         error = null,
                         isLoading = false,
                         manualRefreshPending = false,
-                        isInitialLoadComplete = true
-                    ) 
+                        isInitialLoadComplete = true,
+                        currentTime = Instant.now()
+                    )
                 }
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: Exception) {
-                _uiState.update { 
+            } catch (_: Exception) {
+                _uiState.update {
                     it.copy(
-                        error = "Unable to retrieve temperature data. Check your connection and login.",
+                        error = "Unable to retrieve temperature data. Check your connection and try again.",
                         isLoading = false,
                         manualRefreshPending = false
-                    ) 
+                    )
                 }
             }
         }
@@ -112,27 +118,35 @@ class TemperatureViewModel(
                     minimum = minimum,
                     maximum = maximum
                 )
-                
-                // Update the snapshot with the new storage data
+                val refreshed = try {
+                    repository.loadLive()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    null
+                }
                 _uiState.update { currentState ->
-                    val updatedSnapshot = currentState.snapshot?.copy(storage = updatedStorage)
+                    val updatedSnapshot = refreshed ?: currentState.snapshot?.copy(storage = updatedStorage)
                     currentState.copy(
                         snapshot = updatedSnapshot,
-                        savingLimits = false
+                        savingLimits = false,
+                        currentTime = Instant.now()
                     )
                 }
                 onSuccess()
-            } catch (e: Exception) {
-                _uiState.update { 
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _uiState.update {
                     it.copy(
                         limitSaveError = "Unable to save limits. Check your Admin login and permissions.",
                         savingLimits = false
-                    ) 
+                    )
                 }
             }
         }
     }
-    
+
     fun clearLimitSaveError() {
         _uiState.update { it.copy(limitSaveError = null) }
     }
