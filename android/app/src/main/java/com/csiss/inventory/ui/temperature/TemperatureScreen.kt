@@ -16,12 +16,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -62,8 +67,15 @@ private val HeroGradientColors = listOf(
     Color(0xFF4C1D95),
     Color(0xFF6D28D9)
 )
-private val HeroLabelColor = Color(0xFFC4B5FD)
+private val HeroMutedText = Color(0xFFEDE9FE)
 private val HeroDividerColor = Color(0xFF7C3AED)
+private val HeroStatusNormal = Color(0xFF86EFAC)
+private val HeroStatusAlert = Color(0xFFFECACA)
+private val HeroStatusNeutral = Color(0xFFEDE9FE)
+private val ChartAxisText = Color(0xFF526075)
+private val ChartLineBlue = Color(0xFF0284C7)
+private val ChartAlertRed = Color(0xFFDC2626)
+private val TabularDigitsStyle = TextStyle(fontFeatureSettings = "tnum")
 private val CardShape = RoundedCornerShape(18.dp)
 private val HeroShape = RoundedCornerShape(20.dp)
 private val FieldShape = RoundedCornerShape(12.dp)
@@ -136,24 +148,27 @@ fun TemperatureScreen(
                 )
             }
 
-            uiState.snapshot?.let { data ->
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    SensorConnectionIndicator(
-                        lastReadingAt = data.logs.firstOrNull()?.recordedAt,
-                        currentTime = uiState.currentTime,
-                        serverReachable = uiState.error == null
-                    )
-                    AlertsStatusButton(
-                        alertCount = data.alerts.count { alert ->
-                            alert.status == "OPEN" || alert.status == "ACKNOWLEDGED"
-                        },
-                        onClick = onOpenAlerts
-                    )
-                }
+            val activeAlertCount = uiState.snapshot?.alerts?.count { alert ->
+                alert.status == "OPEN" || alert.status == "ACKNOWLEDGED"
+            }
+
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                itemVerticalAlignment = Alignment.CenterVertically
+            ) {
+                SensorConnectionIndicator(
+                    lastReadingAt = uiState.snapshot?.logs?.firstOrNull()?.recordedAt,
+                    currentTime = uiState.currentTime,
+                    serverReachable = uiState.error == null,
+                    isLoading = showRefreshIndicator
+                )
+                AlertsStatusButton(
+                    alertCount = activeAlertCount,
+                    isLoading = showRefreshIndicator,
+                    onClick = onOpenAlerts
+                )
             }
 
             uiState.error?.let { message ->
@@ -371,96 +386,54 @@ private fun TemperatureErrorBanner(
 @Composable
 private fun TemperatureHero(data: TemperatureSnapshot) {
     val latest = data.logs.firstOrNull()
-    val abnormal = latest != null && (
-        latest.temperature < data.storage.minTemperature ||
-            latest.temperature > data.storage.maxTemperature
-    )
+    val minLimit = data.storage.minTemperature
+    val maxLimit = data.storage.maxTemperature
+    val abnormal = latest != null && (latest.temperature < minLimit || latest.temperature > maxLimit)
+
     val statusLabel = when {
-        latest == null -> "NO READING"
-        abnormal -> "OUT OF RANGE"
-        else -> "WITHIN RANGE"
+        latest == null -> "No reading"
+        abnormal -> "Out of range"
+        else -> "Within range"
     }
     val statusColor = when {
-        latest == null -> Color(0xFFDAE3EF)
-        abnormal -> Color(0xFFFFBEC6)
-        else -> Color(0xFF98F0CD)
+        latest == null -> HeroStatusNeutral
+        abnormal -> HeroStatusAlert
+        else -> HeroStatusNormal
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                brush = Brush.linearGradient(colors = HeroGradientColors),
-                shape = HeroShape
-            )
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                text = data.storage.storageName,
-                color = Color.White,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 17.sp,
-                maxLines = 2
-            )
-            Text(
-                text = "TEMPERATURE SENSOR",
-                color = HeroLabelColor,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.9.sp
-            )
-        }
-
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = "LATEST RECORDED TEMPERATURE",
-                color = HeroLabelColor,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 0.8.sp
-            )
-            Text(
-                text = latest?.let { formatTemp(it.temperature) } ?: "--",
-                color = Color.White,
-                fontSize = 50.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            Surface(
-                color = statusColor.copy(alpha = 0.16f),
-                shape = RoundedCornerShape(50.dp)
-            ) {
-                Text(
-                    text = statusLabel,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                    color = statusColor,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 0.5.sp
-                )
-            }
-        }
-
-        HorizontalDivider(color = HeroDividerColor.copy(alpha = 0.6f))
-
-        Text(
-            text = latest?.let { "Recorded ${formatTime(it.recordedAt)}" }
-                ?: "Waiting for sensor readings",
-            modifier = Modifier.fillMaxWidth(),
-            color = HeroLabelColor,
-            fontSize = 12.sp,
-            textAlign = TextAlign.Center
-        )
-    }
+    TemperatureHeroCard(
+        title = data.storage.storageName,
+        statusLabel = statusLabel,
+        statusColor = statusColor,
+        temperatureText = latest?.let { formatTemp(it.temperature) } ?: "--",
+        footerText = latest?.let { "Recorded ${formatTime(it.recordedAt)}" }
+            ?: "Waiting for sensor readings"
+    )
 }
 
 @Composable
 private fun TemperaturePlaceholderHero(isLoading: Boolean) {
+    TemperatureHeroCard(
+        title = "Cold Storage",
+        statusLabel = if (isLoading) "Loading" else "Unavailable",
+        statusColor = HeroStatusNeutral,
+        temperatureText = "--",
+        footerText = if (isLoading) {
+            "Loading sensor reading"
+        } else {
+            "Sensor data unavailable. Pull down to refresh"
+        }
+    )
+}
+
+@Composable
+private fun TemperatureHeroCard(
+    title: String,
+    statusLabel: String,
+    statusColor: Color,
+    temperatureText: String,
+    footerText: String
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -471,65 +444,74 @@ private fun TemperaturePlaceholderHero(isLoading: Boolean) {
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                text = "Cold Storage",
-                color = Color.White,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = "TEMPERATURE SENSOR",
-                color = HeroLabelColor,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.9.sp
-            )
-        }
-
-        Column(
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "LATEST RECORDED TEMPERATURE",
-                color = HeroLabelColor,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                text = "—",
+                text = title,
                 color = Color.White,
-                fontSize = 50.sp,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 16.sp,
+                lineHeight = 22.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 12.dp)
             )
-            Surface(
-                color = Color.White.copy(alpha = 0.14f),
-                shape = RoundedCornerShape(50.dp)
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .background(statusColor, CircleShape)
+                )
                 Text(
-                    text = if (isLoading) "LOADING" else "UNAVAILABLE",
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                    color = Color(0xFFDAE3EF),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold
+                    text = statusLabel,
+                    color = statusColor,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1
                 )
             }
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = "Latest reading",
+                color = HeroMutedText,
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1
+            )
+            Text(
+                text = temperatureText,
+                style = TabularDigitsStyle,
+                color = Color.White,
+                fontSize = 48.sp,
+                lineHeight = 52.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1
+            )
         }
 
         HorizontalDivider(color = HeroDividerColor.copy(alpha = 0.6f))
 
         Text(
-            text = if (isLoading) {
-                "Retrieving temperature data..."
-            } else {
-                "Temperature data unavailable"
-            },
-            modifier = Modifier.fillMaxWidth(),
-            color = HeroLabelColor,
+            text = footerText,
+            style = TabularDigitsStyle,
+            color = HeroMutedText,
             fontSize = 12.sp,
-            textAlign = TextAlign.Center
+            lineHeight = 16.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -600,8 +582,8 @@ private fun TemperatureChart(
 
             if (ordered.size < 2) {
                 Text(
-                    text = "More readings are needed to show a trend.",
-                    color = TextMuted,
+                    text = "At least 2 readings are needed to plot a trend. Pull down to refresh",
+                    color = ChartAxisText,
                     fontSize = 13.sp
                 )
                 return@Column
@@ -617,28 +599,19 @@ private fun TemperatureChart(
                 storage.maxTemperature.toFloat()
             ) + 2f
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = formatTemp(maxValue.toDouble()),
-                    color = TextMuted,
-                    fontSize = 11.sp
-                )
-                Text(
-                    text = "Limit markers",
-                    color = TextMuted,
-                    fontSize = 11.sp
-                )
-            }
+            Text(
+                text = formatTemp(maxValue.toDouble()),
+                style = TabularDigitsStyle,
+                color = ChartAxisText,
+                fontSize = 11.sp
+            )
 
             Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(170.dp)
+                    .height(200.dp)
             ) {
-                val pad = 9.dp.toPx()
+                val pad = 8.dp.toPx()
                 val plotWidth = size.width - pad * 2f
                 val plotHeight = size.height - pad * 2f
 
@@ -647,6 +620,17 @@ private fun TemperatureChart(
                         ((temp - minValue) / (maxValue - minValue)) * plotHeight
 
                 val step = plotWidth / (ordered.size - 1)
+
+                // Shaded allowed-range band between min and max limits
+                val yMaxLimit = yPosition(storage.maxTemperature.toFloat())
+                val yMinLimit = yPosition(storage.minTemperature.toFloat())
+                val bandTop = minOf(yMaxLimit, yMinLimit)
+                val bandHeight = kotlin.math.abs(yMinLimit - yMaxLimit)
+                drawRect(
+                    color = ChartLineBlue.copy(alpha = 0.09f),
+                    topLeft = Offset(pad, bandTop),
+                    size = Size(plotWidth, bandHeight)
+                )
 
                 for (i in 0..4) {
                     val y = pad + i * plotHeight / 4f
@@ -658,16 +642,17 @@ private fun TemperatureChart(
                     )
                 }
 
-                listOf(
-                    storage.minTemperature.toFloat(),
-                    storage.maxTemperature.toFloat()
-                ).forEach { limit ->
-                    val y = yPosition(limit)
+                val dashEffect = PathEffect.dashPathEffect(
+                    floatArrayOf(6.dp.toPx(), 4.dp.toPx()),
+                    0f
+                )
+                listOf(yMaxLimit, yMinLimit).forEach { y ->
                     drawLine(
-                        color = Color(0xFFB7CDD9),
+                        color = ChartLineBlue.copy(alpha = 0.5f),
                         start = Offset(pad, y),
                         end = Offset(size.width - pad, y),
-                        strokeWidth = 2.dp.toPx()
+                        strokeWidth = 1.dp.toPx(),
+                        pathEffect = dashEffect
                     )
                 }
 
@@ -680,43 +665,76 @@ private fun TemperatureChart(
 
                 drawPath(
                     path = path,
-                    color = IceBlue,
-                    style = Stroke(width = 3.dp.toPx())
+                    color = ChartLineBlue,
+                    style = Stroke(
+                        width = 2.5.dp.toPx(),
+                        cap = StrokeCap.Round,
+                        join = StrokeJoin.Round
+                    )
                 )
 
                 ordered.forEachIndexed { index, reading ->
+                    val center = Offset(
+                        pad + index * step,
+                        yPosition(reading.temperature.toFloat())
+                    )
                     drawCircle(
-                        color = if (reading.isAbnormal) AlertRed else IceBlue,
-                        radius = 5.dp.toPx(),
-                        center = Offset(
-                            pad + index * step,
-                            yPosition(reading.temperature.toFloat())
-                        )
+                        color = Color.White,
+                        radius = 4.5.dp.toPx(),
+                        center = center
+                    )
+                    drawCircle(
+                        color = if (reading.isAbnormal) ChartAlertRed else ChartLineBlue,
+                        radius = if (reading.isAbnormal) 3.5.dp.toPx() else 3.dp.toPx(),
+                        center = center
                     )
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = formatTime(ordered.first().recordedAt),
-                    fontSize = 10.sp,
-                    color = TextMuted
-                )
-                Text(
-                    text = formatTime(ordered.last().recordedAt),
-                    fontSize = 10.sp,
-                    color = TextMuted
-                )
-            }
-
             Text(
-                text = "Blue: within limits  ·  Red: outside limits",
-                color = TextMuted,
+                text = formatTemp(minValue.toDouble()),
+                style = TabularDigitsStyle,
+                color = ChartAxisText,
                 fontSize = 11.sp
             )
+
+            HorizontalDivider(color = DividerColor)
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(ChartLineBlue, CircleShape)
+                    )
+                    Text(
+                        text = "Within limits",
+                        color = ChartAxisText,
+                        fontSize = 11.sp
+                    )
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(ChartAlertRed, CircleShape)
+                    )
+                    Text(
+                        text = "Outside limits",
+                        color = ChartAxisText,
+                        fontSize = 11.sp
+                    )
+                }
+            }
         }
     }
 }
@@ -872,7 +890,8 @@ private fun EditTemperatureLimitsDialog(
 private fun SensorConnectionIndicator(
     lastReadingAt: String?,
     currentTime: Instant,
-    serverReachable: Boolean
+    serverReachable: Boolean,
+    isLoading: Boolean = false
 ) {
     val lastReading = lastReadingAt?.let {
         runCatching { OffsetDateTime.parse(it).toInstant() }.getOrNull()
@@ -884,11 +903,12 @@ private fun SensorConnectionIndicator(
         secondsSinceReading != null &&
         secondsSinceReading in -120L..180L
     val statusColor = when {
-        !serverReachable -> TextMuted
+        isLoading || !serverReachable -> ChartAxisText
         connected -> NormalGreen
         else -> AlertRed
     }
     val statusLabel = when {
+        isLoading -> "Checking sensor"
         !serverReachable -> "Can't reach server"
         connected -> "ESP32 Connected"
         else -> "ESP32 Offline"
@@ -902,7 +922,9 @@ private fun SensorConnectionIndicator(
         shape = RoundedCornerShape(50.dp)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier
+                .height(34.dp)
+                .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -925,15 +947,23 @@ private fun SensorConnectionIndicator(
 
 @Composable
 private fun AlertsStatusButton(
-    alertCount: Int,
+    alertCount: Int?,
+    isLoading: Boolean = false,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val hasAlerts = alertCount > 0
-    val accent = if (hasAlerts) AlertRed else NormalGreen
-    val label = when (alertCount) {
-        0 -> "No Alerts"
-        1 -> "1 Alert"
+    val showGrey = isLoading || alertCount == null
+    val hasAlerts = (alertCount ?: 0) > 0
+    val accent = when {
+        showGrey -> ChartAxisText
+        hasAlerts -> AlertRed
+        else -> NormalGreen
+    }
+    val label = when {
+        isLoading -> "Loading alerts"
+        alertCount == null -> "Alerts"
+        alertCount == 0 -> "No Alerts"
+        alertCount == 1 -> "1 Alert"
         else -> "$alertCount Alerts"
     }
 
@@ -946,7 +976,9 @@ private fun AlertsStatusButton(
         shape = RoundedCornerShape(50.dp)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier
+                .height(34.dp)
+                .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -962,7 +994,7 @@ private fun AlertsStatusButton(
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1
             )
-            Text(text = "→", color = accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text(text = "→", color = accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }

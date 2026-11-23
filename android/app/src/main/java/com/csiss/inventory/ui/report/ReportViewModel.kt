@@ -105,7 +105,6 @@ class ReportViewModel(
                     format = format
                 )
 
-                // Record report generation in Supabase public.reports
                 val savedRecord = try {
                     repository.saveReportRecord(
                         reportName = reportData.reportName,

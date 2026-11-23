@@ -230,7 +230,6 @@ class MainActivity : ComponentActivity() {
                                             .padding(vertical = 4.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        // Hamburger Menu (Left)
                                         IconButton(
                                             onClick = {
                                                 drawerScope.launch {
@@ -257,7 +256,6 @@ class MainActivity : ComponentActivity() {
                                             }
                                         }
 
-                                        // Title (Center)
                                         Text(
                                             text = "CSISS",
                                             modifier = Modifier.padding(vertical = 10.dp),
@@ -427,8 +425,8 @@ class MainActivity : ComponentActivity() {
                                     ReportScreen()
                                 }
                             }
-                        } // End Scaffold
-                    } // End ModalNavigationDrawer
+                        }
+                    }
 
 
                     // Urgent Pop-Up Alert Dialog for Staff & Admin
@@ -579,66 +577,49 @@ private fun CompactManagementDrawer(
     onReportsClick: () -> Unit,
 ) {
     val navy = Color(0xFF132945)
-    val iceBlue = Color(0xFF34B9DB)
-    val iceBlueSoft = Color(0xFFEAF6FC)
     val ink = Color(0xFF182B48)
-    val muted = Color(0xFF718198)
+    val slate = Color(0xFF526075)
+    val cardBg = Color(0xFFF5F7FA)
     val border = Color(0xFFE2E8F0)
     val divider = Color(0xFFEDF2F7)
-    val dangerText = Color(0xFFD92D3F)
-    val dangerBg = Color(0xFFFFF1F2)
-    val dangerBorder = Color(0xFFFECDD3)
+    val dangerText = Color(0xFFC81E32)
 
     val initial = userName.trim().take(1).uppercase().ifBlank { "U" }
     val roleLabel = if (role == "ADMIN") "Administrator" else "Staff"
 
     ModalDrawerSheet(
-        modifier = Modifier.width(300.dp),
+        modifier = Modifier.width(288.dp),
         drawerContainerColor = Color.White,
-        drawerShape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp)
+        drawerShape = RoundedCornerShape(topEnd = 20.dp, bottomEnd = 20.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp, vertical = 14.dp)
+                .padding(horizontal = 16.dp, vertical = 16.dp)
         ) {
-            // 1. Brand Header
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)
+            Column(
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .width(4.dp)
-                        .height(30.dp)
-                        .background(iceBlue, RoundedCornerShape(4.dp))
+                Text(
+                    text = "CSISS",
+                    color = navy,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
-                Column {
-                    Text(
-                        text = "CSISS",
-                        color = navy,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.8.sp
-                    )
-                    Text(
-                        text = "COLD STORAGE SYSTEM",
-                        color = muted,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 1.1.sp
-                    )
-                }
+                Text(
+                    text = "Cold storage",
+                    color = slate,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Normal
+                )
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(16.dp))
 
-            // 2. Profile Summary Card (tappable -> My Profile)
             Surface(
-                onClick = onProfileClick,
-                color = Color(0xFFF4F8FC),
-                shape = RoundedCornerShape(14.dp),
+                color = cardBg,
+                shape = RoundedCornerShape(12.dp),
                 border = BorderStroke(1.dp, border),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -659,13 +640,13 @@ private fun CompactManagementDrawer(
                             text = initial,
                             color = Color.White,
                             fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
 
                     Column(
                         modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         Text(
                             text = userName,
@@ -675,41 +656,29 @@ private fun CompactManagementDrawer(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        Surface(
-                            color = if (role == "ADMIN") iceBlueSoft else Color(0xFFE8EEF6),
-                            shape = RoundedCornerShape(50.dp)
-                        ) {
-                            Text(
-                                text = roleLabel,
-                                color = if (role == "ADMIN") navy else Color(0xFF495A70),
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                            )
-                        }
+                        Text(
+                            text = roleLabel,
+                            color = slate,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Normal,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
-
-                    Text(
-                        text = "›",
-                        color = muted,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Medium
-                    )
                 }
             }
 
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(16.dp))
             HorizontalDivider(color = divider)
 
-            // 3. Scrollable Menu Sections
             Column(
                 modifier = Modifier
                     .weight(1f)
                     .verticalScroll(rememberScrollState())
-                    .padding(vertical = 10.dp),
+                    .padding(vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                DrawerSectionTitle("MANAGEMENT")
+                DrawerSectionTitle("Management")
 
                 DrawerMenuItem(
                     label = "Supplier Management",
@@ -738,10 +707,10 @@ private fun CompactManagementDrawer(
                 )
 
                 if (role == "ADMIN") {
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(8.dp))
                     HorizontalDivider(color = divider)
                     Spacer(Modifier.height(4.dp))
-                    DrawerSectionTitle("ADMINISTRATION")
+                    DrawerSectionTitle("Administration")
 
                     DrawerMenuItem(
                         label = "User Management",
@@ -751,10 +720,10 @@ private fun CompactManagementDrawer(
                     )
                 }
 
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(8.dp))
                 HorizontalDivider(color = divider)
                 Spacer(Modifier.height(4.dp))
-                DrawerSectionTitle("ACCOUNT")
+                DrawerSectionTitle("Account")
 
                 DrawerMenuItem(
                     label = "My Profile",
@@ -764,38 +733,27 @@ private fun CompactManagementDrawer(
                 )
             }
 
-            // 4. Pinned Bottom Footer
             HorizontalDivider(color = divider)
             Spacer(Modifier.height(12.dp))
 
-            Surface(
+            OutlinedButton(
                 onClick = onLogoutClick,
-                color = dangerBg,
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, dangerBorder),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(44.dp)
+                    .height(44.dp),
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.dp, border),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = Color.White,
+                    contentColor = dangerText
+                )
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = "Log out",
-                        color = dangerText,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
+                Text(
+                    text = "Log out",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
             }
-
-            Spacer(Modifier.height(10.dp))
-
-            Text(
-                text = "CSISS · Cold Chain Management",
-                color = Color(0xFF94A3B8),
-                fontSize = 10.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
         }
     }
 }
@@ -804,11 +762,10 @@ private fun CompactManagementDrawer(
 private fun DrawerSectionTitle(text: String) {
     Text(
         text = text,
-        color = Color(0xFF8A99AD),
-        fontSize = 10.sp,
-        fontWeight = FontWeight.Bold,
-        letterSpacing = 1.1.sp,
-        modifier = Modifier.padding(start = 12.dp, top = 6.dp, bottom = 4.dp)
+        color = Color(0xFF526075),
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Medium,
+        modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp)
     )
 }
 
@@ -820,18 +777,17 @@ private fun DrawerMenuItem(
     onClick: () -> Unit
 ) {
     val navy = Color(0xFF132945)
-    val iceBlue = Color(0xFF34B9DB)
-    val activeBg = Color(0xFFEAF6FC)
+    val activeBg = Color(0xFFEEF4FA)
     val ink = Color(0xFF182B48)
-    val iconMuted = Color(0xFF64748B)
+    val iconMuted = Color(0xFF526075)
 
     Surface(
         onClick = onClick,
         color = if (selected) activeBg else Color.Transparent,
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(10.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .height(46.dp)
+            .height(48.dp)
     ) {
         Row(
             modifier = Modifier
@@ -840,15 +796,6 @@ private fun DrawerMenuItem(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .width(3.dp)
-                    .height(20.dp)
-                    .background(
-                        if (selected) iceBlue else Color.Transparent,
-                        RoundedCornerShape(4.dp)
-                    )
-            )
             Icon(
                 imageVector = icon,
                 contentDescription = null,
@@ -873,38 +820,41 @@ private fun ComingSoonDrawerRow(
     title: String,
     imageVector: ImageVector
 ) {
+    val upcomingMuted = Color(0xFF64748B)
+    val tagBg = Color(0xFFF1F5F9)
+    val tagText = Color(0xFF526075)
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(46.dp)
+            .height(48.dp)
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Spacer(Modifier.width(3.dp))
         Icon(
             imageVector = imageVector,
             contentDescription = null,
             modifier = Modifier.size(20.dp),
-            tint = Color(0xFF94A3B8)
+            tint = upcomingMuted
         )
         Text(
             text = title,
             modifier = Modifier.weight(1f),
-            color = Color(0xFF94A3B8),
+            color = upcomingMuted,
             fontSize = 14.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
         Surface(
-            color = Color(0xFFEEF2F6),
-            shape = RoundedCornerShape(50.dp)
+            color = tagBg,
+            shape = RoundedCornerShape(6.dp)
         ) {
             Text(
-                text = "Soon",
-                color = Color(0xFF64748B),
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold,
+                text = "Coming soon",
+                color = tagText,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
             )
         }
