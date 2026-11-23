@@ -10,7 +10,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -575,239 +579,335 @@ private fun CompactManagementDrawer(
     onReportsClick: () -> Unit,
 ) {
     val navy = Color(0xFF132945)
+    val iceBlue = Color(0xFF34B9DB)
+    val iceBlueSoft = Color(0xFFEAF6FC)
+    val ink = Color(0xFF182B48)
     val muted = Color(0xFF718198)
+    val border = Color(0xFFE2E8F0)
+    val divider = Color(0xFFEDF2F7)
+    val dangerText = Color(0xFFD92D3F)
+    val dangerBg = Color(0xFFFFF1F2)
+    val dangerBorder = Color(0xFFFECDD3)
+
+    val initial = userName.trim().take(1).uppercase().ifBlank { "U" }
+    val roleLabel = if (role == "ADMIN") "Administrator" else "Staff"
 
     ModalDrawerSheet(
-        modifier = Modifier.widthIn(max = 320.dp)
+        modifier = Modifier.width(300.dp),
+        drawerContainerColor = Color.White,
+        drawerShape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp)
     ) {
         Column(
             modifier = Modifier
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 14.dp)
         ) {
-            Text(
-                text = "CSISS",
-                color = navy,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Surface(
-                color = Color(0xFFF1F6FB),
-                shape = RoundedCornerShape(12.dp)
+            // 1. Brand Header
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)
             ) {
-                Column(
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
+                        .width(4.dp)
+                        .height(30.dp)
+                        .background(iceBlue, RoundedCornerShape(4.dp))
+                )
+                Column {
                     Text(
-                        text = userName,
+                        text = "CSISS",
                         color = navy,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.8.sp
                     )
-
                     Text(
-                        text = if (role == "ADMIN")
-                            "Administrator"
-                        else
-                            "Staff",
+                        text = "COLD STORAGE SYSTEM",
                         color = muted,
-                        fontSize = 12.sp
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 1.1.sp
                     )
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(12.dp))
 
-            HorizontalDivider()
-
-            Text(
-                text = "MANAGEMENT",
-                color = muted,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 1.sp,
-                modifier = Modifier.padding(top = 12.dp)
-            )
-
-            NavigationDrawerItem(
-                label = {
-                    Text("Supplier Management")
-                },
-                selected = supplierSelected,
-                onClick = onSupplierClick,
-                icon = {
-                    Icon(
-                        imageVector = FluentuiSystemIconsSupplier,
-                        contentDescription = null
-                    )
-                },
-                colors = NavigationDrawerItemDefaults.colors(
-                    selectedContainerColor = Color(0xFFE9DFF7),
-                    selectedTextColor = navy,
-                    selectedIconColor = navy
-                )
-            )
-
-            NavigationDrawerItem(
-                label = { Text("Reorder Management") },
-                selected = reorderSelected,
-                onClick = onReorderClick,
-                icon = {
-                    Icon(
-                        imageVector = FluentuiSystemIconsClipboardBulletListRtl,
-                        contentDescription = null
-                    )
-                },
-                colors = NavigationDrawerItemDefaults.colors(
-                    selectedContainerColor = Color(0xFFE9DFF7),
-                    selectedTextColor = navy,
-                    selectedIconColor = navy
-                )
-            )
-
-            ComingSoonDrawerRow(
-                title = "Supplier Claims",
-                imageVector = BootstrapExclamationSquare
-            )
-
-            NavigationDrawerItem(
-                label = { Text("Reports") },
-                selected = reportsSelected,
-                onClick = onReportsClick,
-                icon = {
-                    Icon(
-                        imageVector = VscodeCodiconsGraphLine,
-                        contentDescription = null
-                    )
-                },
-                colors = NavigationDrawerItemDefaults.colors(
-                    selectedContainerColor = Color(0xFFE9DFF7),
-                    selectedTextColor = navy,
-                    selectedIconColor = navy
-                )
-            )
-
-
-            if (role == "ADMIN") {
-                HorizontalDivider()
-                Text(
-                    text = "ADMINISTRATION",
-                    color = muted,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 1.sp,
-                    modifier = Modifier.padding(top = 12.dp)
-                )
-
-                NavigationDrawerItem(
-                    label = {
-                        Text("User Management")
-                    },
-                    selected = userSelected,
-                    onClick = onUserClick,
-                    icon = {
-                        Icon(
-                            imageVector = HeroiconsUserGroup,
-                            contentDescription = null
+            // 2. Profile Summary Card (tappable -> My Profile)
+            Surface(
+                onClick = onProfileClick,
+                color = Color(0xFFF4F8FC),
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, border),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(navy, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = initial,
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
                         )
-                    },
-                    colors = NavigationDrawerItemDefaults.colors(
-                        selectedContainerColor = Color(0xFFE9DFF7),
-                        selectedTextColor = Color(0xFF132945),
-                        selectedIconColor = Color(0xFF132945)
-                    )
-                )
+                    }
 
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = userName,
+                            color = ink,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Surface(
+                            color = if (role == "ADMIN") iceBlueSoft else Color(0xFFE8EEF6),
+                            shape = RoundedCornerShape(50.dp)
+                        ) {
+                            Text(
+                                text = roleLabel,
+                                color = if (role == "ADMIN") navy else Color(0xFF495A70),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "›",
+                        color = muted,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
 
-            HorizontalDivider()
+            Spacer(Modifier.height(14.dp))
+            HorizontalDivider(color = divider)
 
-            Text(
-                text = "ACCOUNT",
-                color = muted,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 1.sp,
-                modifier = Modifier.padding(top = 12.dp)
-            )
+            // 3. Scrollable Menu Sections
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                DrawerSectionTitle("MANAGEMENT")
 
-            NavigationDrawerItem(
-                label = {
-                    Text("My Profile")
-                },
-                selected = profileSelected,
-                onClick = onProfileClick,
-                icon = {
-                    Icon(
-                        imageVector = FluentuiSystemIconsPerson,
-                        contentDescription = null
-                    )
-                },
-                colors = NavigationDrawerItemDefaults.colors(
-                    selectedContainerColor = Color(0xFFE9DFF7),
-                    selectedTextColor = navy,
-                    selectedIconColor = navy
+                DrawerMenuItem(
+                    label = "Supplier Management",
+                    icon = FluentuiSystemIconsSupplier,
+                    selected = supplierSelected,
+                    onClick = onSupplierClick
                 )
-            )
 
-            NavigationDrawerItem(
-                label = {
+                DrawerMenuItem(
+                    label = "Reorder Management",
+                    icon = FluentuiSystemIconsClipboardBulletListRtl,
+                    selected = reorderSelected,
+                    onClick = onReorderClick
+                )
+
+                DrawerMenuItem(
+                    label = "Reports",
+                    icon = VscodeCodiconsGraphLine,
+                    selected = reportsSelected,
+                    onClick = onReportsClick
+                )
+
+                ComingSoonDrawerRow(
+                    title = "Supplier Claims",
+                    imageVector = BootstrapExclamationSquare
+                )
+
+                if (role == "ADMIN") {
+                    Spacer(Modifier.height(6.dp))
+                    HorizontalDivider(color = divider)
+                    Spacer(Modifier.height(4.dp))
+                    DrawerSectionTitle("ADMINISTRATION")
+
+                    DrawerMenuItem(
+                        label = "User Management",
+                        icon = HeroiconsUserGroup,
+                        selected = userSelected,
+                        onClick = onUserClick
+                    )
+                }
+
+                Spacer(Modifier.height(6.dp))
+                HorizontalDivider(color = divider)
+                Spacer(Modifier.height(4.dp))
+                DrawerSectionTitle("ACCOUNT")
+
+                DrawerMenuItem(
+                    label = "My Profile",
+                    icon = FluentuiSystemIconsPerson,
+                    selected = profileSelected,
+                    onClick = onProfileClick
+                )
+            }
+
+            // 4. Pinned Bottom Footer
+            HorizontalDivider(color = divider)
+            Spacer(Modifier.height(12.dp))
+
+            Surface(
+                onClick = onLogoutClick,
+                color = dangerBg,
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, dangerBorder),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
                     Text(
                         text = "Log out",
-                        color = Color(0xFFE45465)
+                        color = dangerText,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
-                },
-                selected = false,
-                onClick = onLogoutClick
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            Text(
+                text = "CSISS · Cold Chain Management",
+                color = Color(0xFF94A3B8),
+                fontSize = 10.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }
 }
 
+@Composable
+private fun DrawerSectionTitle(text: String) {
+    Text(
+        text = text,
+        color = Color(0xFF8A99AD),
+        fontSize = 10.sp,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = 1.1.sp,
+        modifier = Modifier.padding(start = 12.dp, top = 6.dp, bottom = 4.dp)
+    )
+}
+
+@Composable
+private fun DrawerMenuItem(
+    label: String,
+    icon: ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val navy = Color(0xFF132945)
+    val iceBlue = Color(0xFF34B9DB)
+    val activeBg = Color(0xFFEAF6FC)
+    val ink = Color(0xFF182B48)
+    val iconMuted = Color(0xFF64748B)
+
+    Surface(
+        onClick = onClick,
+        color = if (selected) activeBg else Color.Transparent,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(46.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .height(20.dp)
+                    .background(
+                        if (selected) iceBlue else Color.Transparent,
+                        RoundedCornerShape(4.dp)
+                    )
+            )
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = if (selected) navy else iconMuted
+            )
+            Text(
+                text = label,
+                color = if (selected) navy else ink,
+                fontSize = 14.sp,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
 
 @Composable
 private fun ComingSoonDrawerRow(
     title: String,
     imageVector: ImageVector
 ) {
-    val muted = Color(0xFF718198)
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(
-                start = 16.dp,
-                end = 12.dp,
-                top = 12.dp,
-                bottom = 12.dp
-            ),
+            .height(46.dp)
+            .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        Spacer(Modifier.width(3.dp))
         Icon(
             imageVector = imageVector,
             contentDescription = null,
-            modifier = Modifier.size(24.dp),
-            tint = Color(0xFF132945)
+            modifier = Modifier.size(20.dp),
+            tint = Color(0xFF94A3B8)
         )
-
         Text(
             text = title,
             modifier = Modifier.weight(1f),
-            color = muted,
-            fontSize = 14.sp
+            color = Color(0xFF94A3B8),
+            fontSize = 14.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
-
-        Text(
-            text = "Soon",
-            color = muted,
-            fontSize = 11.sp
-        )
+        Surface(
+            color = Color(0xFFEEF2F6),
+            shape = RoundedCornerShape(50.dp)
+        ) {
+            Text(
+                text = "Soon",
+                color = Color(0xFF64748B),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+            )
+        }
     }
 }
 
