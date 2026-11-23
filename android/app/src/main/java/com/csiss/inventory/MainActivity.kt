@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -83,13 +84,27 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MaterialTheme {
+                var lastRoute by rememberSaveable { mutableStateOf(Screen.Stock.route) }
+
                 CsissAuthGate { currentUser, onLogout ->
                     val context = LocalContext.current
                     val alertRepository = remember { AlertRepository() }
 
+                    val initialRoute = remember { lastRoute }
                     val navController = rememberNavController()
                     val navBackStackEntry by navController.currentBackStackEntryAsState()
                     val currentRoute = navBackStackEntry?.destination?.route
+
+                    LaunchedEffect(currentRoute) {
+                        if (currentRoute != null) {
+                            lastRoute = currentRoute
+                        }
+                    }
+
+                    val handleLogout: () -> Unit = {
+                        lastRoute = Screen.Stock.route
+                        onLogout()
+                    }
 
                     var alertsFilter by remember { mutableIntStateOf(0) }
                     var openAlerts by remember { mutableStateOf<List<SystemAlertRow>>(emptyList()) }
@@ -146,7 +161,7 @@ class MainActivity : ComponentActivity() {
                                     drawerScope.launch {
                                         drawerState.close()
                                         navController.navigate(Screen.Supplier.route) {
-                                            popUpTo(Screen.Stock.route)
+                                            popUpTo(navController.graph.startDestinationId)
                                             launchSingleTop = true
                                         }
                                     }
@@ -155,7 +170,7 @@ class MainActivity : ComponentActivity() {
                                     drawerScope.launch {
                                         drawerState.close()
                                         navController.navigate(Screen.Profile.route) {
-                                            popUpTo(Screen.Stock.route)
+                                            popUpTo(navController.graph.startDestinationId)
                                             launchSingleTop = true
                                         }
                                     }
@@ -170,7 +185,7 @@ class MainActivity : ComponentActivity() {
                                     drawerScope.launch {
                                         drawerState.close()
                                         navController.navigate(Screen.UserManagement.route) {
-                                            popUpTo(Screen.Stock.route)
+                                            popUpTo(navController.graph.startDestinationId)
                                             launchSingleTop = true
                                         }
                                     }
@@ -180,7 +195,7 @@ class MainActivity : ComponentActivity() {
                                     drawerScope.launch {
                                         drawerState.close()
                                         navController.navigate(Screen.Reorder.route) {
-                                            popUpTo(Screen.Stock.route)
+                                            popUpTo(navController.graph.startDestinationId)
                                             launchSingleTop = true
                                         }
                                     }
@@ -190,7 +205,7 @@ class MainActivity : ComponentActivity() {
                                     drawerScope.launch {
                                         drawerState.close()
                                         navController.navigate(Screen.Reports.route) {
-                                            popUpTo(Screen.Stock.route)
+                                            popUpTo(navController.graph.startDestinationId)
                                             launchSingleTop = true
                                         }
                                     }
@@ -257,7 +272,7 @@ class MainActivity : ComponentActivity() {
                                         selected = currentRoute == Screen.Stock.route,
                                         onClick = { 
                                             navController.navigate(Screen.Stock.route) {
-                                                popUpTo(Screen.Stock.route)
+                                                popUpTo(navController.graph.startDestinationId)
                                                 launchSingleTop = true
                                             } 
                                         },
@@ -273,7 +288,7 @@ class MainActivity : ComponentActivity() {
                                         selected = currentRoute == Screen.Inventory.route,
                                         onClick = { 
                                             navController.navigate(Screen.Inventory.route) {
-                                                popUpTo(Screen.Stock.route)
+                                                popUpTo(navController.graph.startDestinationId)
                                                 launchSingleTop = true
                                             }
                                         },
@@ -289,7 +304,7 @@ class MainActivity : ComponentActivity() {
                                         selected = currentRoute == Screen.Temperature.route,
                                         onClick = { 
                                             navController.navigate(Screen.Temperature.route) {
-                                                popUpTo(Screen.Stock.route)
+                                                popUpTo(navController.graph.startDestinationId)
                                                 launchSingleTop = true
                                             }
                                         },
@@ -306,7 +321,7 @@ class MainActivity : ComponentActivity() {
                                         onClick = {
                                             alertsFilter = 0
                                             navController.navigate(Screen.Alerts.route) {
-                                                popUpTo(Screen.Stock.route)
+                                                popUpTo(navController.graph.startDestinationId)
                                                 launchSingleTop = true
                                             }
                                         },
@@ -331,29 +346,13 @@ class MainActivity : ComponentActivity() {
                                         },
                                         label = { BottomNavLabel("Alerts") }
                                     )
-                                    NavigationBarItem(
-                                        selected = currentRoute == Screen.Profile.route,
-                                        onClick = { 
-                                            navController.navigate(Screen.Profile.route) {
-                                                popUpTo(Screen.Stock.route)
-                                                launchSingleTop = true
-                                            }
-                                        },
-                                        icon = {
-                                            Icon(
-                                                imageVector = FluentuiSystemIconsPerson,
-                                                contentDescription = null
-                                            )
-                                        },
-                                        label = { BottomNavLabel("Profile") }
-                                    )
                                 }
 
                             }
                         ) { innerPadding ->
                             NavHost(
                                 navController = navController,
-                                startDestination = Screen.Stock.route,
+                                startDestination = initialRoute,
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .padding(innerPadding),
@@ -369,7 +368,7 @@ class MainActivity : ComponentActivity() {
                                         onOpenAlerts = {
                                             alertsFilter = 2
                                             navController.navigate(Screen.Alerts.route) {
-                                                popUpTo(Screen.Stock.route)
+                                                popUpTo(navController.graph.startDestinationId)
                                                 launchSingleTop = true
                                             }
                                         }
@@ -386,7 +385,7 @@ class MainActivity : ComponentActivity() {
                                 composable(Screen.Profile.route) {
                                     ProfileScreen(
                                         user = currentUser,
-                                        onLogout = onLogout
+                                        onLogout = handleLogout
                                     )
                                 }
                                 composable(Screen.Inventory.route) {
@@ -483,7 +482,7 @@ class MainActivity : ComponentActivity() {
                                         showStartupAlertPopup = false
                                         alertsFilter = 0
                                         navController.navigate(Screen.Alerts.route) {
-                                            popUpTo(Screen.Stock.route)
+                                            popUpTo(navController.graph.startDestinationId)
                                             launchSingleTop = true
                                         }
                                     },
@@ -519,7 +518,7 @@ class MainActivity : ComponentActivity() {
                                 TextButton(
                                     onClick = {
                                         showDrawerLogoutDialog = false
-                                        onLogout()
+                                        handleLogout()
                                     }
                                 ) {
                                     Text(
