@@ -6,23 +6,57 @@ import android.content.Intent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextFieldColors
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -40,27 +74,26 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private val Navy = Color(0xFF132945)
-private val IceBlueSoft = Color(0xFFE6F6FB)
-private val InfoText = Color(0xFF1E7E9C)
+private val IceBlue = Color(0xFF0284C7)
 private val Background = Color(0xFFF1F6FB)
+private val SubtleSurface = Color(0xFFF5F7FA)
+private val TrackBg = Color(0xFFECEFF4)
+private val TagBg = Color(0xFFEEF2F6)
 private val Ink = Color(0xFF182B48)
-private val Muted = Color(0xFF718198)
+private val Slate = Color(0xFF526075)
 private val CardBorder = Color(0xFFE0E6EF)
 private val DividerColor = Color(0xFFEDF2F7)
 private val RedDark = Color(0xFFB42332)
-private val RedBg = Color(0xFFFDECEF)
-private val RedBorder = Color(0xFFF7B8C0)
-private val GreenDark = Color(0xFF117A5C)
-private val GreenBg = Color(0xFFE3F7F0)
-private val GreenBorder = Color(0xFF9EE2C8)
-private val AmberDark = Color(0xFF9A5504)
-private val AmberBg = Color(0xFFFFF3DC)
-private val NeutralBadge = Color(0xFF495A70)
-private val NeutralBadgeBg = Color(0xFFE8EEF6)
+private val RedAccent = Color(0xFFDC2626)
+private val GreenAccent = Color(0xFF16A34A)
+private val AmberAccent = Color(0xFFD97706)
 
-private val CardShape = RoundedCornerShape(18.dp)
-private val FieldShape = RoundedCornerShape(12.dp)
-private val BadgeShape = RoundedCornerShape(50.dp)
+private val CardShape = RoundedCornerShape(16.dp)
+private val TrackShape = RoundedCornerShape(12.dp)
+private val ControlShape = RoundedCornerShape(10.dp)
+private val SegmentShape = RoundedCornerShape(8.dp)
+private val TagShape = RoundedCornerShape(6.dp)
+private val TabularDigitsStyle = TextStyle(fontFeatureSettings = "tnum")
 private val DisplayDateFormat = DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.ENGLISH)
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -110,17 +143,16 @@ fun ReportScreen(
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 24.dp),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        text = "ANALYTICS & EXPORTS",
-                        color = Muted,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 1.sp
+                        text = "Analytics & exports",
+                        color = Slate,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
                     )
                     Text(
                         text = "Reports",
@@ -131,7 +163,6 @@ fun ReportScreen(
                 }
             }
 
-            // Generate Report Card (Option B: clean straight into report builder)
             item {
                 GenerateReportCard(
                     selectedType = selectedType,
@@ -188,7 +219,7 @@ fun ReportScreen(
                         onOpen = {
                             val opened = openExportedFile(context, exported)
                             if (!opened) {
-                                openError = "No app found to open ${exported.format.label} files. You can view it in Downloads/CSISS."
+                                openError = "No app found to open ${exported.format.label} files. Check Downloads/CSISS"
                             }
                         },
                         onShare = {
@@ -213,13 +244,29 @@ fun ReportScreen(
             }
 
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = "Report History (${filteredHistory.size})",
-                        color = Ink,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                Column(
+                    modifier = Modifier.padding(top = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Report history",
+                            color = Ink,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "${filteredHistory.size}",
+                            style = TabularDigitsStyle,
+                            color = Slate,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
 
                     Row(
                         modifier = Modifier
@@ -227,13 +274,13 @@ fun ReportScreen(
                             .horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        HistoryFilterPill(
+                        HistoryFilterChip(
                             label = "All",
                             selected = historyFilter == "ALL",
                             onClick = { historyFilter = "ALL" }
                         )
                         ReportType.entries.forEach { type ->
-                            HistoryFilterPill(
+                            HistoryFilterChip(
                                 label = type.shortLabel,
                                 selected = historyFilter == type.dbValue,
                                 onClick = { historyFilter = type.dbValue }
@@ -246,7 +293,7 @@ fun ReportScreen(
             if (!uiState.hasLoadedOnce && uiState.isLoading) {
                 item {
                     ReportEmptyCard(
-                        title = "Loading report history...",
+                        title = "Loading report history",
                         subtitle = null
                     )
                 }
@@ -254,11 +301,11 @@ fun ReportScreen(
                 item {
                     ReportEmptyCard(
                         title = if (historyFilter == "ALL") {
-                            "No reports generated yet"
+                            "No reports yet"
                         } else {
                             "No reports in this category"
                         },
-                        subtitle = "Choose a report type above and tap Generate & Export Report."
+                        subtitle = "Choose a report type above and tap Export"
                     )
                 }
             } else {
@@ -305,113 +352,131 @@ private fun GenerateReportCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                text = "Generate New Report",
+                text = "Generate report",
                 color = Ink,
                 fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.SemiBold
             )
 
-            // Report Type Dropdown
-            ExposedDropdownMenuBox(
-                expanded = typeExpanded,
-                onExpandedChange = { if (!isGenerating) typeExpanded = it }
-            ) {
-                OutlinedTextField(
-                    value = selectedType.label,
-                    onValueChange = {},
-                    readOnly = true,
-                    enabled = !isGenerating,
-                    label = { Text("Report Type") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeExpanded) },
-                    shape = FieldShape,
-                    colors = reportFieldColors(),
-                    modifier = Modifier
-                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = !isGenerating)
-                        .fillMaxWidth()
-                )
-                ExposedDropdownMenu(
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                ExposedDropdownMenuBox(
                     expanded = typeExpanded,
-                    onDismissRequest = { typeExpanded = false },
-                    containerColor = Color.White
+                    onExpandedChange = { if (!isGenerating) typeExpanded = it }
                 ) {
-                    ReportType.entries.forEach { type ->
-                        DropdownMenuItem(
-                            text = {
-                                Column {
-                                    Text(type.label, color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                                    Text(type.description, color = Muted, fontSize = 11.sp, maxLines = 2)
+                    OutlinedTextField(
+                        value = selectedType.label,
+                        onValueChange = {},
+                        readOnly = true,
+                        enabled = !isGenerating,
+                        label = { Text("Report type") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeExpanded) },
+                        shape = ControlShape,
+                        colors = reportFieldColors(),
+                        modifier = Modifier
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = !isGenerating)
+                            .fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = typeExpanded,
+                        onDismissRequest = { typeExpanded = false },
+                        containerColor = Color.White
+                    ) {
+                        ReportType.entries.forEach { type ->
+                            DropdownMenuItem(
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text(
+                                            text = type.label,
+                                            color = Ink,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 14.sp
+                                        )
+                                        Text(
+                                            text = type.description,
+                                            color = Slate,
+                                            fontSize = 12.sp,
+                                            maxLines = 2
+                                        )
+                                    }
+                                },
+                                onClick = {
+                                    onSelectType(type)
+                                    typeExpanded = false
                                 }
-                            },
-                            onClick = {
-                                onSelectType(type)
-                                typeExpanded = false
-                            }
-                        )
+                            )
+                        }
                     }
                 }
+
+                Text(
+                    text = selectedType.description,
+                    color = Slate,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp
+                )
             }
 
-            Text(
-                text = selectedType.description,
-                color = Muted,
-                fontSize = 12.sp,
-                lineHeight = 17.sp
-            )
-
-            // Date Range Selector (for Stock Movement & Temperature)
             if (selectedType.supportsDateRange) {
                 HorizontalDivider(color = DividerColor)
 
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        text = "DATE RANGE",
-                        color = Muted,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 1.sp
+                        text = "Date range",
+                        color = Slate,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
                     )
 
-                    Row(
+                    Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        shape = TrackShape,
+                        color = TrackBg,
+                        border = BorderStroke(1.dp, CardBorder)
                     ) {
-                        val today = LocalDate.now()
-                        val is7Days = !useAllTime && startDate == today.minusDays(7) && endDate == today
-                        val is30Days = !useAllTime && startDate == today.minusDays(30) && endDate == today
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            val today = LocalDate.now()
+                            val is7Days = !useAllTime && startDate == today.minusDays(7) && endDate == today
+                            val is30Days = !useAllTime && startDate == today.minusDays(30) && endDate == today
 
-                        PresetChip(
-                            label = "Last 7 Days",
-                            selected = is7Days,
-                            enabled = !isGenerating,
-                            onClick = { onSelectPreset(7) },
-                            modifier = Modifier.weight(1f)
-                        )
-                        PresetChip(
-                            label = "Last 30 Days",
-                            selected = is30Days,
-                            enabled = !isGenerating,
-                            onClick = { onSelectPreset(30) },
-                            modifier = Modifier.weight(1f)
-                        )
-                        PresetChip(
-                            label = "All Time",
-                            selected = useAllTime,
-                            enabled = !isGenerating,
-                            onClick = { onSelectPreset(null) },
-                            modifier = Modifier.weight(1f)
-                        )
+                            PresetSegment(
+                                label = "7 days",
+                                selected = is7Days,
+                                enabled = !isGenerating,
+                                onClick = { onSelectPreset(7) },
+                                modifier = Modifier.weight(1f)
+                            )
+                            PresetSegment(
+                                label = "30 days",
+                                selected = is30Days,
+                                enabled = !isGenerating,
+                                onClick = { onSelectPreset(30) },
+                                modifier = Modifier.weight(1f)
+                            )
+                            PresetSegment(
+                                label = "All time",
+                                selected = useAllTime,
+                                enabled = !isGenerating,
+                                onClick = { onSelectPreset(null) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                     }
 
                     if (!useAllTime) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             DatePickerButton(
-                                label = "Start Date",
+                                label = "Start date",
                                 date = startDate,
                                 enabled = !isGenerating,
                                 modifier = Modifier.weight(1f),
@@ -427,7 +492,7 @@ private fun GenerateReportCard(
                                 }
                             )
                             DatePickerButton(
-                                label = "End Date",
+                                label = "End date",
                                 date = endDate,
                                 enabled = !isGenerating,
                                 modifier = Modifier.weight(1f),
@@ -446,7 +511,7 @@ private fun GenerateReportCard(
 
                         if (dateRangeInvalid) {
                             Text(
-                                text = "Start Date must be on or before End Date.",
+                                text = "Start date must be on or before end date",
                                 color = RedDark,
                                 fontSize = 12.sp
                             )
@@ -457,20 +522,18 @@ private fun GenerateReportCard(
 
             HorizontalDivider(color = DividerColor)
 
-            // File Format Segmented Toggle
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = "EXPORT FORMAT",
-                    color = Muted,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 1.sp
+                    text = "Export format",
+                    color = Slate,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
                 )
 
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = FieldShape,
-                    color = Background,
+                    shape = TrackShape,
+                    color = TrackBg,
                     border = BorderStroke(1.dp, CardBorder)
                 ) {
                     Row(
@@ -483,7 +546,7 @@ private fun GenerateReportCard(
                         ReportFormat.entries.forEach { format ->
                             val selected = format == selectedFormat
                             Surface(
-                                shape = RoundedCornerShape(9.dp),
+                                shape = SegmentShape,
                                 color = if (selected) Navy else Color.Transparent,
                                 modifier = Modifier
                                     .weight(1f)
@@ -495,12 +558,17 @@ private fun GenerateReportCard(
                                         onClick = { onSelectFormat(format) }
                                     )
                             ) {
-                                Box(contentAlignment = Alignment.Center) {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
+                                ) {
                                     Text(
-                                        text = if (format == ReportFormat.PDF) "PDF Document" else "CSV Spreadsheet",
-                                        color = if (selected) Color.White else Muted,
+                                        text = if (format == ReportFormat.PDF) "PDF document" else "CSV sheet",
+                                        color = if (selected) Color.White else Slate,
                                         fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold
+                                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
@@ -514,8 +582,8 @@ private fun GenerateReportCard(
                 enabled = !isGenerating && !dateRangeInvalid,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp),
-                shape = FieldShape,
+                    .height(44.dp),
+                shape = ControlShape,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Navy,
                     contentColor = Color.White
@@ -523,14 +591,22 @@ private fun GenerateReportCard(
             ) {
                 if (isGenerating) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
+                        modifier = Modifier.size(16.dp),
                         strokeWidth = 2.dp,
                         color = Color.White
                     )
-                    Spacer(Modifier.width(10.dp))
-                    Text("Generating ${selectedFormat.label}...", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "Exporting ${selectedFormat.label}",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 } else {
-                    Text("Generate & Export ${selectedFormat.label}", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        text = "Export ${selectedFormat.label}",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
         }
@@ -547,72 +623,125 @@ private fun ExportSuccessCard(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = CardShape,
-        color = GreenBg,
-        border = BorderStroke(1.dp, GreenBorder)
+        color = Color.White,
+        border = BorderStroke(1.dp, GreenAccent.copy(alpha = 0.4f))
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Report Exported",
-                    color = GreenDark,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(GreenAccent, CircleShape)
+                    )
+                    Text(
+                        text = "Report exported",
+                        color = Ink,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
                 TextButton(
                     onClick = onDismiss,
-                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                 ) {
-                    Text("Dismiss", color = GreenDark, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        text = "Dismiss",
+                        color = Slate,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
 
-            Text(
-                text = "${exported.fileName} (${exported.rowCount} rows)\nSaved to ${exported.locationLabel}",
-                color = Ink,
-                fontSize = 12.sp,
-                lineHeight = 18.sp
-            )
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = SegmentShape,
+                color = SubtleSurface,
+                border = BorderStroke(1.dp, CardBorder)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = exported.fileName,
+                        style = TabularDigitsStyle,
+                        color = Ink,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    HorizontalDivider(color = DividerColor)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${exported.rowCount} rows",
+                            style = TabularDigitsStyle,
+                            color = Slate,
+                            fontSize = 12.sp
+                        )
+                        Text(
+                            text = exported.locationLabel,
+                            color = Slate,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(start = 12.dp)
+                        )
+                    }
+                }
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Button(
                     onClick = onOpen,
                     modifier = Modifier
                         .weight(1f)
-                        .height(42.dp),
-                    shape = FieldShape,
+                        .height(44.dp),
+                    shape = ControlShape,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Navy,
                         contentColor = Color.White
                     )
                 ) {
-                    Text("Open File", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Open file", fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 }
 
                 OutlinedButton(
                     onClick = onShare,
                     modifier = Modifier
                         .weight(1f)
-                        .height(42.dp),
-                    shape = FieldShape,
-                    border = BorderStroke(1.dp, GreenDark.copy(alpha = 0.4f)),
+                        .height(44.dp),
+                    shape = ControlShape,
+                    border = BorderStroke(1.dp, CardBorder),
                     colors = ButtonDefaults.outlinedButtonColors(
                         containerColor = Color.White,
-                        contentColor = GreenDark
+                        contentColor = Ink
                     )
                 ) {
-                    Text("Share", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Share", fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 }
             }
         }
@@ -624,16 +753,12 @@ private fun ReportHistoryCard(record: ReportRecord) {
     val type = ReportType.fromDb(record.reportType)
     val format = ReportFormat.fromDb(record.fileFormat)
 
-    val (typeFg, typeBg) = when (type) {
-        ReportType.INVENTORY -> Navy to IceBlueSoft
-        ReportType.STOCK_MOVEMENT -> InfoText to IceBlueSoft
-        ReportType.EXPIRY -> AmberDark to AmberBg
-        ReportType.SUPPLIER -> NeutralBadge to NeutralBadgeBg
-        ReportType.TEMPERATURE -> RedDark to RedBg
-    }
-    val (fmtFg, fmtBg) = when (format) {
-        ReportFormat.PDF -> RedDark to RedBg
-        ReportFormat.CSV -> GreenDark to GreenBg
+    val dotColor = when (type) {
+        ReportType.INVENTORY -> Navy
+        ReportType.STOCK_MOVEMENT -> IceBlue
+        ReportType.EXPIRY -> AmberAccent
+        ReportType.SUPPLIER -> Slate
+        ReportType.TEMPERATURE -> RedAccent
     }
 
     val rangeText = if (!record.startDate.isNullOrBlank() && !record.endDate.isNullOrBlank()) {
@@ -641,9 +766,9 @@ private fun ReportHistoryCard(record: ReportRecord) {
             .getOrElse { record.startDate }
         val end = runCatching { LocalDate.parse(record.endDate).format(DisplayDateFormat) }
             .getOrElse { record.endDate }
-        "$start – $end"
+        "$start to $end"
     } else {
-        "All dates (Snapshot)"
+        "All dates (snapshot)"
     }
 
     Surface(
@@ -663,15 +788,40 @@ private fun ReportHistoryCard(record: ReportRecord) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    ReportBadge(text = type.shortLabel, textColor = typeFg, backgroundColor = typeBg)
-                    ReportBadge(text = format.label, textColor = fmtFg, backgroundColor = fmtBg)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(dotColor, CircleShape)
+                    )
+                    Text(
+                        text = type.shortLabel,
+                        color = Slate,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Surface(
+                        shape = TagShape,
+                        color = TagBg
+                    ) {
+                        Text(
+                            text = format.label,
+                            color = Ink,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        )
+                    }
                 }
 
                 Text(
                     text = formatGeneratedAt(record.generatedAt),
-                    color = Muted,
-                    fontSize = 11.sp
+                    style = TabularDigitsStyle,
+                    color = Slate,
+                    fontSize = 12.sp
                 )
             }
 
@@ -685,8 +835,9 @@ private fun ReportHistoryCard(record: ReportRecord) {
             )
 
             Text(
-                text = "Range: $rangeText",
-                color = Muted,
+                text = rangeText,
+                style = TabularDigitsStyle,
+                color = Slate,
                 fontSize = 12.sp
             )
         }
@@ -694,7 +845,7 @@ private fun ReportHistoryCard(record: ReportRecord) {
 }
 
 @Composable
-private fun PresetChip(
+private fun PresetSegment(
     label: String,
     selected: Boolean,
     enabled: Boolean,
@@ -704,20 +855,19 @@ private fun PresetChip(
     Surface(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.heightIn(min = 36.dp),
-        shape = RoundedCornerShape(9.dp),
-        color = if (selected) Navy else Background,
-        border = if (selected) null else BorderStroke(1.dp, CardBorder)
+        modifier = modifier.heightIn(min = 40.dp),
+        shape = SegmentShape,
+        color = if (selected) Navy else Color.Transparent
     ) {
         Box(
             contentAlignment = Alignment.Center,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp)
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
         ) {
             Text(
                 text = label,
-                color = if (selected) Color.White else Muted,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
+                color = if (selected) Color.White else Slate,
+                fontSize = 12.sp,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -737,7 +887,7 @@ private fun DatePickerButton(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier.heightIn(min = 52.dp),
-        shape = FieldShape,
+        shape = ControlShape,
         border = BorderStroke(1.dp, CardBorder),
         colors = ButtonDefaults.outlinedButtonColors(
             containerColor = Color.White,
@@ -745,10 +895,19 @@ private fun DatePickerButton(
         ),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Text(label, color = Muted, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = label,
+                color = Slate,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium
+            )
             Text(
                 text = date?.format(DisplayDateFormat) ?: "Select",
+                style = TabularDigitsStyle,
                 color = Ink,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
@@ -760,40 +919,23 @@ private fun DatePickerButton(
 }
 
 @Composable
-private fun HistoryFilterPill(
+private fun HistoryFilterChip(
     label: String,
     selected: Boolean,
     onClick: () -> Unit
 ) {
     Surface(
         onClick = onClick,
-        shape = BadgeShape,
+        shape = SegmentShape,
         color = if (selected) Navy else Color.White,
         border = if (selected) null else BorderStroke(1.dp, CardBorder)
     ) {
         Text(
             text = label,
-            color = if (selected) Color.White else Muted,
+            color = if (selected) Color.White else Slate,
             fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-        )
-    }
-}
-
-@Composable
-private fun ReportBadge(
-    text: String,
-    textColor: Color,
-    backgroundColor: Color
-) {
-    Surface(shape = BadgeShape, color = backgroundColor) {
-        Text(
-            text = text,
-            color = textColor,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
         )
     }
 }
@@ -805,17 +947,22 @@ private fun ReportErrorBanner(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = FieldShape,
-        color = RedBg,
-        border = BorderStroke(1.dp, RedBorder)
+        shape = ControlShape,
+        color = Color.White,
+        border = BorderStroke(1.dp, RedAccent.copy(alpha = 0.35f))
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+                .padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .background(RedAccent, CircleShape)
+            )
             Text(
                 text = message,
                 color = RedDark,
@@ -824,8 +971,16 @@ private fun ReportErrorBanner(
                 modifier = Modifier.weight(1f)
             )
             if (onRetry != null) {
-                TextButton(onClick = onRetry) {
-                    Text("Retry", color = RedDark, fontWeight = FontWeight.Bold)
+                TextButton(
+                    onClick = onRetry,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "Retry",
+                        color = RedDark,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
         }
@@ -848,7 +1003,7 @@ private fun ReportEmptyCard(
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp, vertical = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text(
                 text = title,
@@ -860,7 +1015,7 @@ private fun ReportEmptyCard(
             if (!subtitle.isNullOrBlank()) {
                 Text(
                     text = subtitle,
-                    color = Muted,
+                    color = Slate,
                     fontSize = 13.sp,
                     textAlign = TextAlign.Center
                 )
@@ -874,7 +1029,7 @@ private fun reportFieldColors(): TextFieldColors = OutlinedTextFieldDefaults.col
     focusedBorderColor = Navy,
     unfocusedBorderColor = CardBorder,
     focusedLabelColor = Navy,
-    unfocusedLabelColor = Muted,
+    unfocusedLabelColor = Slate,
     focusedContainerColor = Color.White,
     unfocusedContainerColor = Color.White,
     cursorColor = Navy

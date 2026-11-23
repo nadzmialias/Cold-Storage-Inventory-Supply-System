@@ -27,35 +27,35 @@ enum class ReportType(
         dbValue = "INVENTORY",
         label = "Inventory Summary",
         shortLabel = "Inventory",
-        description = "Current product catalogue, available quantities, and stock status.",
+        description = "Current product catalogue, available quantities, and stock status",
         supportsDateRange = false
     ),
     STOCK_MOVEMENT(
         dbValue = "STOCK_MOVEMENT",
         label = "Stock Movement",
         shortLabel = "Stock",
-        description = "Stock In and Stock Out transactions with reference codes and reasons.",
+        description = "Stock in and stock out transactions with reference codes and reasons",
         supportsDateRange = true
     ),
     EXPIRY(
         dbValue = "EXPIRY",
         label = "Expiry Tracking",
         shortLabel = "Expiry",
-        description = "Active batches ordered by expiry date, highlighting near-expiry & expired stock.",
+        description = "Active batches ordered by expiry date, highlighting near-expiry and expired stock",
         supportsDateRange = false
     ),
     SUPPLIER(
         dbValue = "SUPPLIER",
         label = "Supplier Directory",
         shortLabel = "Supplier",
-        description = "Registered suppliers, contacts, and active/inactive status.",
+        description = "Registered suppliers, contacts, and active or inactive status",
         supportsDateRange = false
     ),
     TEMPERATURE(
         dbValue = "TEMPERATURE",
         label = "Temperature Logs",
         shortLabel = "Temp",
-        description = "Cold storage readings, min/max compliance, and abnormal temperature events.",
+        description = "Cold storage readings, min/max compliance, and out-of-range events",
         supportsDateRange = true
     );
 

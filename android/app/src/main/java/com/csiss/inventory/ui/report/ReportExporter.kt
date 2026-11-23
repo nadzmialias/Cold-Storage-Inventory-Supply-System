@@ -196,7 +196,6 @@ object ReportExporter {
             var canvas = page.canvas
             var y = margin
 
-            // Navy title banner on Page 1
             val bannerRect = RectF(margin, y, pageWidth - margin, y + 72f)
             canvas.drawRoundRect(bannerRect, 10f, 10f, headerBgPaint)
             canvas.drawText("CSISS · COLD STORAGE INVENTORY SUPPLY SYSTEM", margin + 14f, y + 20f, brandPaint)
@@ -209,7 +208,6 @@ object ReportExporter {
             )
             y += 86f
 
-            // Summary metric boxes
             if (data.summaryMetrics.isNotEmpty()) {
                 val gap = 10f
                 val boxWidth = (contentWidth - gap * (data.summaryMetrics.size - 1)) / data.summaryMetrics.size
