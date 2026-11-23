@@ -4,17 +4,17 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import com.csiss.inventory.ui.components.CsissLightRefreshIndicator
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -22,327 +22,258 @@ import com.csiss.inventory.data.AlertRepository
 import com.csiss.inventory.data.SystemAlertRow
 import com.csiss.inventory.ui.components.SummaryStat
 import com.csiss.inventory.ui.components.SummaryStatsCard
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private val Navy = Color(0xFF132945)
-private val IceBlue = Color(0xFF34B9DB)
+private val Ink = Color(0xFF182B48)
+private val Muted = Color(0xFF506583)
 private val Background = Color(0xFFF1F6FB)
-private val TextDark = Color(0xFF182B48)
-private val TextMuted = Color(0xFF718198)
-private val AlertRed = Color(0xFFE45465)
-private val WarningOrange = Color(0xFFE59A23)
-private val NormalGreen = Color(0xFF159C76)
+private val CardShape = RoundedCornerShape(20.dp)
+private val FieldShape = RoundedCornerShape(12.dp)
+private val MalaysiaZone = ZoneId.of("Asia/Kuala_Lumpur")
+private val TimeFormat = DateTimeFormatter.ofPattern("dd MMM yyyy, HH:mm", Locale.ENGLISH)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationScreen(
-    initialFilter: Int = 0,
-    onOpenCountChanged: (Int) -> Unit = {}
+    initialFilter: Int = 0, // 0 = Open, 1 = Stock, 2 = Temp, 3 = Done
+    userRole: String = "STAFF",
+    onOpenCountChanged: (Int) -> Unit = {},
+    modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
     val repository = remember { AlertRepository() }
     val scope = rememberCoroutineScope()
 
     var alerts by remember { mutableStateOf<List<SystemAlertRow>>(emptyList()) }
-    var hasLoadedData by remember { mutableStateOf(false) }
-    var loading by remember { mutableStateOf(true) }
-    var manualRefreshPending by remember { mutableStateOf(false) }
+    var selectedTab by remember(initialFilter) { mutableIntStateOf(initialFilter) }
+    var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    var refreshTrigger by remember { mutableIntStateOf(0) }
-    val pullToRefreshState = rememberPullToRefreshState()
-    val requestRefresh: () -> Unit = {
-        if (!loading && !manualRefreshPending) {
-            manualRefreshPending = true
-            refreshTrigger++
-        }
-    }
-    // 0 = Open, 1 = Stock & Expiry, 2 = Temperature, 3 = Done
-    var selectedFilter by remember(initialFilter) { mutableIntStateOf(initialFilter) }
 
-    LaunchedEffect(refreshTrigger) {
-        loading = true
+    suspend fun reload() {
+        val loaded = repository.loadAndSyncAlerts()
+        alerts = loaded
+        onOpenCountChanged(loaded.count { !it.isResolved })
+    }
+
+    fun runTask(work: suspend () -> Unit) {
+        if (busy) return
+        busy = true
         error = null
-        try {
-            val loaded = repository.loadAndSyncAlerts()
-            alerts = loaded
-            hasLoadedData = true
-            val openAlerts = loaded.filter { !it.isResolved }
-            onOpenCountChanged(openAlerts.size)
-            AlertNotificationHelper.showSystemPopupIfNeeded(context, openAlerts)
-        } catch (e: Exception) {
-            error = "Unable to load alerts: ${e.message ?: "Check connection"}"
-        } finally {
-            loading = false
-            manualRefreshPending = false
+        scope.launch {
+            try {
+                work()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                error = failure.message
+                    ?.substringBefore("URL:")
+                    ?.trim()
+                    ?.take(200)
+                    ?: "Couldn't update notifications."
+            } finally {
+                busy = false
+            }
         }
     }
 
-    val filteredAlerts = remember(alerts, selectedFilter) {
-        when (selectedFilter) {
-            0 -> alerts.filter { !it.isResolved }
-            1 -> alerts.filter { it.isStockRelated }
-            2 -> alerts.filter { it.isTempRelated }
-            else -> alerts.filter { it.isResolved }
-        }
+    LaunchedEffect(Unit) {
+        runTask { reload() }
     }
 
+    val openAlerts = alerts.filter { !it.isResolved }
+    val stockOpenCount = openAlerts.count { it.isStockRelated }
+    val tempOpenCount = openAlerts.count { it.isTempRelated }
+    val resolvedCount = alerts.count { it.isResolved }
 
+    val visibleAlerts = when (selectedTab) {
+        1 -> openAlerts.filter { it.isStockRelated }
+        2 -> openAlerts.filter { it.isTempRelated }
+        3 -> alerts.filter { it.isResolved }
+        else -> openAlerts
+    }
 
-    PullToRefreshBox(
-        isRefreshing = loading,
-        onRefresh = requestRefresh,
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Background),
-        state = pullToRefreshState,
-        indicator = {
-            CsissLightRefreshIndicator(
-                state = pullToRefreshState,
-                isRefreshing = loading,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
-        }
+    MaterialTheme(
+        colorScheme = lightColorScheme(
+            primary = Navy,
+            onPrimary = Color.White,
+            surface = Color.White,
+            onSurface = Ink
+        )
     ) {
-
-
-    Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Background)
+        PullToRefreshBox(
+            isRefreshing = busy,
+            onRefresh = { runTask { reload() } },
+            modifier = modifier.fillMaxSize(),
+            indicator = {}
         ) {
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "REAL-TIME MONITORING",
-                        color = TextMuted,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 1.sp
-                    )
-                    Text(
-                        text = "Alerts",
-                        color = TextDark,
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-
-            AlertSummaryHero(alerts = alerts, showPlaceholders = !hasLoadedData)
-
-            // Filter Pills
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.White, RoundedCornerShape(12.dp))
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                val activeCount = alerts.count { !it.isResolved }
-                val stockCount = alerts.count { it.isStockRelated }
-                val tempCount = alerts.count { it.isTempRelated }
-                val resolvedCount = alerts.count { it.isResolved }
-
-                FilterPill(
-                    label = "Open ($activeCount)",
-                    selected = selectedFilter == 0,
-                    onClick = { selectedFilter = 0 },
-                    modifier = Modifier.weight(1f)
-                )
-                FilterPill(
-                    label = "Stock ($stockCount)",
-                    selected = selectedFilter == 1,
-                    onClick = { selectedFilter = 1 },
-                    modifier = Modifier.weight(1f)
-                )
-                FilterPill(
-                    label = "Temp ($tempCount)",
-                    selected = selectedFilter == 2,
-                    onClick = { selectedFilter = 2 },
-                    modifier = Modifier.weight(1f)
-                )
-                FilterPill(
-                    label = "Done ($resolvedCount)",
-                    selected = selectedFilter == 3,
-                    onClick = { selectedFilter = 3 },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-
-        error?.let {
-            Text(
-                text = it,
-                color = AlertRed,
-                fontSize = 13.sp,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-            )
-        }
             LazyColumn(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentPadding = PaddingValues(
-                    horizontal = 20.dp,
-                    vertical = 8.dp
-                ),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .fillMaxSize()
+                    .background(Background),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                if (filteredAlerts.isEmpty() && !loading) {
-                    item {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(
-                                containerColor = Color.White
-                            )
-                        ) {
-                            Text(
-                                text = "No notifications in this category.",
-                                color = TextMuted,
-                                modifier = Modifier.padding(20.dp)
-                            )
-                        }
-                    }
-                } else {
-                    items(
-                        filteredAlerts,
-                        key = { it.alertId }
-                    ) { alert ->
-                        AlertCard(
-                            alert = alert,
-
-                            onAcknowledge = {
-                                scope.launch {
-                                    runCatching {
-                                        repository.acknowledgeAlert(
-                                            alert.alertId
-                                        )
-                                        refreshTrigger++
-                                    }.onFailure { e ->
-                                        error = e.message
-                                            ?: "Failed to acknowledge alert."
-                                    }
-                                }
-                            },
-
-                            onResolve = {
-                                scope.launch {
-                                    runCatching {
-                                        repository.resolveAlert(
-                                            alert.alertId,
-                                            alert.acknowledgedAt
-                                        )
-                                        refreshTrigger++
-                                    }.onFailure {
-                                        error = "Unable to resolve alert. Please try again."
-                                    }
-                                }
-                            }
+                // Header
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "MONITORING & WARNINGS",
+                            color = Muted,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 1.sp
+                        )
+                        Text(
+                            text = "System Notifications",
+                            color = Ink,
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
-            } // End LazyColumn
 
-        } // End main Column
+                if (busy) {
+                    item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+                }
 
-    } // End outer PullToRefreshBox
+                error?.let { msg ->
+                    item {
+                        Text(
+                            text = msg,
+                            color = MaterialTheme.colorScheme.error,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
 
-} // End NotificationScreen
+                // Summary Card matching Reorder & Inventory screens
+                item {
+                    SummaryStatsCard(
+                        stats = listOf(
+                            SummaryStat(
+                                "OPEN ALERTS",
+                                openAlerts.size.toString(),
+                                if (openAlerts.isNotEmpty()) Color(0xFFFFB7C5) else Color.White
+                            ),
+                            SummaryStat("STOCK / EXPIRY", stockOpenCount.toString()),
+                            SummaryStat(
+                                "TEMP BREACH",
+                                tempOpenCount.toString(),
+                                if (tempOpenCount > 0) Color(0xFFFDE68A) else Color(0xFF9BE8CA)
+                            )
+                        )
+                    )
+                }
 
-@Composable
-private fun AlertSummaryHero(
-    alerts: List<SystemAlertRow>,
-    showPlaceholders: Boolean
-) {
-    val openCount = alerts.count {
-        !it.isResolved && !it.isAcknowledged
+                // Category Tabs: Open | Stock | Temp | Done
+                item {
+                    AlertCategoryTabs(
+                        selectedTab = selectedTab,
+                        openCount = openAlerts.size,
+                        stockCount = stockOpenCount,
+                        tempCount = tempOpenCount,
+                        doneCount = resolvedCount,
+                        onSelect = { selectedTab = it }
+                    )
+                }
+
+                if (visibleAlerts.isEmpty() && !busy) {
+                    item {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = Color.White,
+                            shape = CardShape
+                        ) {
+                            Text(
+                                text = if (selectedTab == 3) {
+                                    "No resolved notifications yet."
+                                } else {
+                                    "All clear — no active alerts in this category."
+                                },
+                                color = Muted,
+                                fontSize = 14.sp,
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        }
+                    }
+                }
+
+                items(visibleAlerts, key = { it.alertId }) { alert ->
+                    AlertCard(
+                        alert = alert,
+                        enabled = !busy,
+                        canResolve = userRole == "ADMIN" || userRole == "STAFF",
+                        onAcknowledge = {
+                            runTask {
+                                repository.acknowledgeAlert(alert.alertId)
+                                reload()
+                            }
+                        },
+                        onResolve = {
+                            runTask {
+                                repository.resolveAlert(alert.alertId, alert.acknowledgedAt)
+                                reload()
+                            }
+                        }
+                    )
+                }
+            }
+        }
     }
-    val ackCount = alerts.count { it.isAcknowledged }
-    val resolvedCount = alerts.count { it.isResolved }
-
-    SummaryStatsCard(
-        stats = listOf(
-            SummaryStat(
-                "UNREAD / ACTIVE",
-                openCount.toString(),
-                if (openCount > 0)
-                    Color(0xFFFFBEC6)
-                else
-                    Color.White
-            ),
-            SummaryStat(
-                "ACKNOWLEDGED",
-                ackCount.toString(),
-                Color(0xFFFDE68A)
-            ),
-            SummaryStat(
-                "RESOLVED",
-                resolvedCount.toString(),
-                Color(0xFF98F0CD)
-            )
-        ),
-        showPlaceholders = showPlaceholders
-    )
 }
 
-
 @Composable
-private fun HeroMetric(label: String, value: String, accent: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally,  verticalArrangement = Arrangement.spacedBy(7.dp)) {
-        Text(
-            text = value,
-            color = accent,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = label,
-            color = Color(0xFFD2DBED),
-            fontSize = 9.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 0.6.sp
-        )
-    }
-}
-
-@Composable
-private fun FilterPill(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
+private fun AlertCategoryTabs(
+    selectedTab: Int,
+    openCount: Int,
+    stockCount: Int,
+    tempCount: Int,
+    doneCount: Int,
+    onSelect: (Int) -> Unit
 ) {
-    Surface(
-        onClick = onClick,
-        modifier = modifier,
-        color = if (selected) Navy else Color.Transparent,
-        shape = RoundedCornerShape(9.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White, FieldShape)
+            .padding(4.dp)
+            .selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Box(
-            modifier = Modifier.padding(vertical = 10.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = label,
-                color = if (selected) Color.White else TextMuted,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold
-            )
+        listOf(
+            0 to "Open ($openCount)",
+            1 to "Stock ($stockCount)",
+            2 to "Temp ($tempCount)",
+            3 to "Done ($doneCount)"
+        ).forEach { (index, label) ->
+            val selected = selectedTab == index
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 42.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (selected) Navy else Color.Transparent)
+                    .selectable(
+                        selected = selected,
+                        role = Role.Tab,
+                        onClick = { onSelect(index) }
+                    )
+                    .padding(horizontal = 4.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = label,
+                    fontSize = 12.sp,
+                    color = if (selected) Color.White else Muted,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                    maxLines = 1
+                )
+            }
         }
     }
 }
@@ -350,26 +281,31 @@ private fun FilterPill(
 @Composable
 private fun AlertCard(
     alert: SystemAlertRow,
+    enabled: Boolean,
+    canResolve: Boolean,
     onAcknowledge: () -> Unit,
     onResolve: () -> Unit
 ) {
-    val typeColor = when {
-        alert.alertType.uppercase().contains("STOCK") ||
-                alert.alertType.uppercase().contains("TEMP") ||
-                alert.alertType.uppercase() == "SENSOR_OFFLINE" -> AlertRed
-        alert.alertType.uppercase().contains("EXPIR") -> WarningOrange
-        else -> IceBlue
+    val categoryLabel = when {
+        alert.isTempRelated -> "TEMPERATURE"
+        alert.isStockRelated -> "STOCK / EXPIRY"
+        else -> "SYSTEM"
     }
-    val statusColor = when {
-        alert.isResolved -> NormalGreen
-        alert.isAcknowledged -> WarningOrange
-        else -> AlertRed
+    val statusBg = when {
+        alert.isResolved -> Color(0xFFE6F6EE)
+        alert.isAcknowledged -> Color(0xFFFEF3C7)
+        else -> Color(0xFFFBE7EC)
+    }
+    val statusFg = when {
+        alert.isResolved -> Color(0xFF135E3D)
+        alert.isAcknowledged -> Color(0xFF92400E)
+        else -> Color(0xFF972D41)
     }
 
-    Card(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+        color = Color.White,
+        shape = CardShape
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -380,49 +316,66 @@ private fun AlertCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    BadgeChip(text = alert.alertType, color = typeColor)
-                    BadgeChip(text = alert.status, color = statusColor)
-                }
                 Text(
-                    text = formatAlertTime(alert.createdAt),
-                    color = TextMuted,
-                    fontSize = 11.sp
+                    text = categoryLabel,
+                    color = Muted,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.8.sp
+                )
+                Text(
+                    text = alert.status.uppercase(Locale.ROOT),
+                    color = statusFg,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .background(statusBg, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
                 )
             }
 
             Text(
                 text = alert.title,
-                color = TextDark,
+                color = Ink,
                 fontSize = 15.sp,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.SemiBold
             )
 
             Text(
                 text = alert.message,
-                color = TextMuted,
+                color = Muted,
                 fontSize = 13.sp
+            )
+
+            Text(
+                text = "Triggered: ${formatAlertTime(alert.createdAt)}",
+                color = Muted,
+                fontSize = 11.sp
             )
 
             if (!alert.isResolved) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     if (!alert.isAcknowledged) {
-                        TextButton(onClick = onAcknowledge) {
-                            Text("Acknowledge", color = WarningOrange, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        OutlinedButton(
+                            onClick = onAcknowledge,
+                            enabled = enabled,
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Acknowledge", color = Navy, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
-                    if (alert.isAcknowledged || !alert.isTempRelated) {
-                        TextButton(onClick = onResolve) {
-                            Text(
-                                "Mark Resolved ✓",
-                                color = NormalGreen,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
+                    if (canResolve) {
+                        Button(
+                            onClick = onResolve,
+                            enabled = enabled,
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Mark Resolved", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
@@ -431,26 +384,11 @@ private fun AlertCard(
     }
 }
 
-@Composable
-private fun BadgeChip(text: String, color: Color) {
-    Surface(
-        color = color.copy(alpha = 0.12f),
-        shape = RoundedCornerShape(50.dp)
-    ) {
-        Text(
-            text = text,
-            color = color,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-        )
+private fun formatAlertTime(raw: String): String =
+    runCatching {
+        OffsetDateTime.parse(raw).toInstant().atZone(MalaysiaZone).format(TimeFormat) + " MYT"
+    }.getOrElse {
+        runCatching {
+            Instant.parse(raw).atZone(MalaysiaZone).format(TimeFormat) + " MYT"
+        }.getOrDefault(raw)
     }
-}
-
-private fun formatAlertTime(value: String): String {
-    return runCatching {
-        OffsetDateTime.parse(value)
-            .atZoneSameInstant(ZoneId.systemDefault())
-            .format(DateTimeFormatter.ofPattern("dd MMM, HH:mm", Locale.ENGLISH))
-    }.getOrElse { value }
-}

@@ -3,3 +3,7 @@ plugins {
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.kotlin.compose) apply false
 }
+
+allprojects {
+    layout.buildDirectory.set(file("${System.getProperty("java.io.tmpdir")}/csiss-build/${project.name}"))
+}

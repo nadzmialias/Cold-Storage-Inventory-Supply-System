@@ -1,29 +1,39 @@
 package com.csiss.inventory.ui.stock
 
+import android.app.DatePickerDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.material3.ExperimentalMaterial3Api
-import com.csiss.inventory.ui.components.CsissLightRefreshIndicator
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.csiss.inventory.data.*
+import com.csiss.inventory.data.EnrichedBatch
+import com.csiss.inventory.data.ProductItem
+import com.csiss.inventory.data.StockRepository
+import com.csiss.inventory.data.StockSnapshot
+import com.csiss.inventory.data.StockTransaction
+import com.csiss.inventory.data.StorageArea
+import com.csiss.inventory.data.SupplierItem
 import com.csiss.inventory.ui.components.SummaryStat
 import com.csiss.inventory.ui.components.SummaryStatsCard
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -31,912 +41,861 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private val Navy = Color(0xFF132945)
-private val IceBlue = Color(0xFF34B9DB)
+private val Ink = Color(0xFF182B48)
+private val Muted = Color(0xFF506583)
 private val Background = Color(0xFFF1F6FB)
-private val TextDark = Color(0xFF182B48)
-private val TextMuted = Color(0xFF718198)
-private val AlertRed = Color(0xFFE45465)
-private val WarningOrange = Color(0xFFE59A23)
-private val NormalGreen = Color(0xFF159C76)
+private val InputBorder = Color(0xFFD8E0EB)
+private val CardShape = RoundedCornerShape(20.dp)
+private val FieldShape = RoundedCornerShape(12.dp)
+private val MalaysiaZone = ZoneId.of("Asia/Kuala_Lumpur")
+private val TimeFormat = DateTimeFormatter.ofPattern("dd MMM yyyy, HH:mm", Locale.ENGLISH)
+private val DateLabelFormat = DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.ENGLISH)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StockScreen() {
+fun StockScreen(
+    currentUserId: String? = null,
+    modifier: Modifier = Modifier
+) {
     val repository = remember { StockRepository() }
+    val scope = rememberCoroutineScope()
 
     var snapshot by remember { mutableStateOf<StockSnapshot?>(null) }
-    var loading by remember { mutableStateOf(true) }
-    var manualRefreshPending by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    var refreshTrigger by remember { mutableIntStateOf(0) }
-    val pullToRefreshState = rememberPullToRefreshState()
-    val requestRefresh: () -> Unit = {
-        if (!loading && !manualRefreshPending) {
-            manualRefreshPending = true
-            refreshTrigger++
-        }
-    }
-    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Active Batches, 1 = History
+    var bannerMessage by remember { mutableStateOf<String?>(null) }
+
+    var showHistoryTab by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    var batchFilter by remember { mutableStateOf("ALL") } // ALL, LOW, EXPIRING
+
     var showStockInDialog by remember { mutableStateOf(false) }
-    var batchForStockOut by remember { mutableStateOf<EnrichedBatch?>(null) }
+    var stockOutTarget by remember { mutableStateOf<EnrichedBatch?>(null) }
 
-    LaunchedEffect(refreshTrigger) {
-        loading = true
+    suspend fun reload() {
+        snapshot = repository.loadLive()
+    }
+
+    fun runTask(work: suspend () -> Unit) {
+        if (busy) return
+        busy = true
         error = null
-        try {
-            snapshot = repository.loadLive()
-        } catch (e: Exception) {
-            error = "Unable to load stock data: ${e.message ?: "Check connection"}"
-        } finally {
-            loading = false
-            manualRefreshPending = false
+        scope.launch {
+            try {
+                work()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                error = failure.message
+                    ?.substringBefore("URL:")
+                    ?.substringBefore("Headers:")
+                    ?.trim()
+                    ?.take(220)
+                    ?: "Couldn't complete stock operation."
+            } finally {
+                busy = false
+            }
         }
     }
 
+    LaunchedEffect(Unit) {
+        runTask { reload() }
+    }
 
-    PullToRefreshBox(
-        isRefreshing = loading,
-        onRefresh = requestRefresh,
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Background),
-        state = pullToRefreshState,
-        indicator = {
-            CsissLightRefreshIndicator(
-                state = pullToRefreshState,
-                isRefreshing = loading,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
-        }
+    val batches = snapshot?.batches.orEmpty()
+    val transactions = snapshot?.transactions.orEmpty()
+    val lowCount = batches.count { it.isLowStock }
+    val expiringCount = batches.count { it.isExpiringSoon }
+
+    MaterialTheme(
+        colorScheme = lightColorScheme(
+            primary = Navy,
+            onPrimary = Color.White,
+            surface = Color.White,
+            onSurface = Ink
+        )
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Background)
+        PullToRefreshBox(
+            isRefreshing = busy,
+            onRefresh = { runTask { reload() } },
+            modifier = modifier.fillMaxSize(),
+            indicator = {}
         ) {
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "INVENTORY & STOCK CONTROL",
-                        color = TextMuted,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 1.sp
-                    )
-                    Text(
-                        text = "Stock",
-                        color = TextDark,
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-
-            // Summary Hero Card
-            val currentSnapshot = snapshot
-            if (currentSnapshot != null) {
-                StockSummaryHero(data = currentSnapshot)
-            } else {
-                SummaryStatsCard(
-                    stats = listOf(
-                        SummaryStat("ACTIVE BATCHES", "0"),
-                        SummaryStat("LOW STOCK", "0"),
-                        SummaryStat("EXPIRING ≤7D", "0")
-                    ),
-                    showPlaceholders = true
-                )
-            }
-
-
-            // Action Buttons Row (Stock In / Stock Out)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Button(
-                    onClick = { showStockInDialog = true },
-                    enabled = snapshot != null && !loading,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(46.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Navy,
-                        contentColor = Color.White
-                    )
-                ) {
-                    Text("+ Stock In", fontWeight = FontWeight.SemiBold)
-                }
-
-                OutlinedButton(
-                    onClick = {
-                        snapshot?.batches?.firstOrNull()?.let { batchForStockOut = it }
-                    },
-                    enabled = !snapshot?.batches.isNullOrEmpty() && !loading,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(46.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Navy)
-                ) {
-                    Text("- Stock Out", fontWeight = FontWeight.SemiBold)
-                }
-            }
-
-            // Sub-navigation Tabs (Batches vs Movements)
-            Row(
+            LazyColumn(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.White, RoundedCornerShape(12.dp))
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    .fillMaxSize()
+                    .background(Background),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                TabPill(
-                    label = "Active Batches (${snapshot?.batches?.size ?: 0})",
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    modifier = Modifier.weight(1f)
-                )
-                TabPill(
-                    label = "Movements (${snapshot?.transactions?.size ?: 0})",
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-
-        error?.let {
-            Text(
-                text = it,
-                color = AlertRed,
-                fontSize = 13.sp,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-            )
-        }
-
-        // Content List
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            val data = snapshot ?: return@LazyColumn
-
-            if (selectedTab == 0) {
-                if (data.batches.isEmpty()) {
-                    item {
-                        EmptyStateCard("No active inventory batches in cold storage.")
-                    }
-                } else {
-                    items(data.batches, key = { it.batch.batchId }) { item ->
-                        BatchItemCard(
-                            item = item,
-                            onDispatchClick = { batchForStockOut = item }
+                // Header
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "COLD CHAIN OPERATIONS",
+                            color = Muted,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 1.sp
+                        )
+                        Text(
+                            text = "Stock Management",
+                            color = Ink,
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
-            } else {
-                if (data.transactions.isEmpty()) {
+
+                if (busy) {
+                    item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+                }
+
+                bannerMessage?.let { msg ->
                     item {
-                        EmptyStateCard("No stock movements recorded yet.")
+                        Surface(
+                            color = Color(0xFFE6F6EE),
+                            shape = FieldShape,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = msg,
+                                    color = Color(0xFF135E3D),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                TextButton(onClick = { bannerMessage = null }) {
+                                    Text("Dismiss", color = Color(0xFF135E3D))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                error?.let { msg ->
+                    item {
+                        Text(
+                            text = msg,
+                            color = MaterialTheme.colorScheme.error,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+
+                // Summary Card matching Reorder & Inventory screens
+                item {
+                    SummaryStatsCard(
+                        stats = listOf(
+                            SummaryStat("ACTIVE BATCHES", batches.size.toString()),
+                            SummaryStat(
+                                "LOW STOCK",
+                                lowCount.toString(),
+                                if (lowCount > 0) Color(0xFFFFB7C5) else Color.White
+                            ),
+                            SummaryStat(
+                                "EXPIRING ≤7D",
+                                expiringCount.toString(),
+                                if (expiringCount > 0) Color(0xFFFDE68A) else Color(0xFF9BE8CA)
+                            )
+                        )
+                    )
+                }
+
+                // Primary Action Buttons: + Stock In & - Stock Out
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Button(
+                            onClick = { showStockInDialog = true },
+                            enabled = !busy && snapshot != null,
+                            shape = FieldShape,
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 46.dp)
+                        ) {
+                            Text("+ Stock In", fontWeight = FontWeight.SemiBold)
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                if (batches.isNotEmpty()) {
+                                    stockOutTarget = batches.first()
+                                }
+                            },
+                            enabled = !busy && batches.isNotEmpty(),
+                            shape = FieldShape,
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 46.dp)
+                        ) {
+                            Text("- Stock Out", color = Navy, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+
+                // Segmented Tab Bar: Active Batches | Movements
+                item {
+                    StockTabs(
+                        showHistory = showHistoryTab,
+                        batchCount = batches.size,
+                        historyCount = transactions.size,
+                        onSelect = { showHistoryTab = it }
+                    )
+                }
+
+                if (!showHistoryTab) {
+                    // Search & Status Filter Chips
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                label = { Text("Search product, batch code, or storage") },
+                                singleLine = true,
+                                shape = FieldShape,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedContainerColor = Color.White,
+                                    unfocusedContainerColor = Color.White,
+                                    focusedBorderColor = Navy,
+                                    unfocusedBorderColor = InputBorder
+                                )
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                listOf(
+                                    "ALL" to "All (${batches.size})",
+                                    "LOW" to "Low Stock ($lowCount)",
+                                    "EXPIRING" to "Expiring ($expiringCount)"
+                                ).forEach { (key, label) ->
+                                    FilterChip(
+                                        selected = batchFilter == key,
+                                        onClick = { batchFilter = key },
+                                        label = { Text(label, fontSize = 12.sp) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    val q = searchQuery.trim()
+                    val filteredBatches = batches.filter { item ->
+                        val matchesStatus = when (batchFilter) {
+                            "LOW" -> item.isLowStock
+                            "EXPIRING" -> item.isExpiringSoon
+                            else -> true
+                        }
+                        val matchesQuery = q.isEmpty() ||
+                                item.batch.batchCode.contains(q, ignoreCase = true) ||
+                                (item.product?.productName?.contains(q, ignoreCase = true) == true) ||
+                                (item.storage?.storageName?.contains(q, ignoreCase = true) == true)
+                        matchesStatus && matchesQuery
+                    }
+
+                    if (filteredBatches.isEmpty() && !busy) {
+                        item {
+                            StockCard {
+                                Text(
+                                    text = "No matching active batches found.",
+                                    color = Muted,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+                    }
+
+                    items(filteredBatches, key = { it.batch.batchId }) { item ->
+                        BatchCard(
+                            item = item,
+                            enabled = !busy,
+                            onMoveClick = { stockOutTarget = item }
+                        )
                     }
                 } else {
-                    items(data.transactions, key = { it.movementId }) { tx ->
-                        TransactionItemCard(tx = tx)
+                    // Movements History Tab
+                    val batchMap = batches.associateBy { it.batch.batchId }
+
+                    if (transactions.isEmpty() && !busy) {
+                        item {
+                            StockCard {
+                                Text(
+                                    text = "No stock movements recorded yet.",
+                                    color = Muted,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+                    }
+
+                    items(transactions, key = { it.movementId }) { tx ->
+                        val linkedBatch = batchMap[tx.batchId]
+                        TransactionCard(tx = tx, linkedBatch = linkedBatch)
                     }
                 }
             }
         }
+
+        // Stock In Dialog
+        val currentSnapshot = snapshot
+        if (showStockInDialog && currentSnapshot != null) {
+            StockInDialog(
+                products = currentSnapshot.products,
+                storages = currentSnapshot.storageAreas,
+                suppliers = currentSnapshot.suppliers,
+                busy = busy,
+                onDismiss = { showStockInDialog = false },
+                onSubmit = { productId, supplierId, storageId, batchCode, qty, expiry, ref, notes ->
+                    runTask {
+                        val createdTx = repository.receiveStockBatch(
+                            userId = currentUserId,
+                            productId = productId,
+                            supplierId = supplierId,
+                            storageId = storageId,
+                            batchCode = batchCode,
+                            quantity = qty,
+                            expiryDate = expiry,
+                            referenceCode = ref,
+                            notes = notes
+                        )
+                        showStockInDialog = false
+                        bannerMessage = "Stock In saved (Movement ID #${createdTx.movementId})"
+                        reload()
+                    }
+                }
+            )
+        }
+
+        // Stock Out / Disposal / Adjustment Dialog
+        val target = stockOutTarget
+        if (target != null) {
+            StockOutDialog(
+                batches = batches,
+                initialBatch = target,
+                busy = busy,
+                onDismiss = { stockOutTarget = null },
+                onSubmit = { selectedBatch, txType, reason, qty, ref, notes ->
+                    runTask {
+                        repository.recordStockMovement(
+                            userId = currentUserId,
+                            batchId = selectedBatch.batch.batchId,
+                            currentRemaining = selectedBatch.batch.quantityRemaining,
+                            transactionType = txType,
+                            reason = reason,
+                            quantity = qty,
+                            referenceCode = ref,
+                            notes = notes
+                        )
+                        stockOutTarget = null
+                        bannerMessage = "Stock movement ($txType) recorded."
+                        reload()
+                    }
+                }
+            )
         }
     }
-
-
-    // Stock In Dialog
-    if (showStockInDialog && snapshot != null) {
-        StockInDialog(
-            products = snapshot!!.products,
-            storageAreas = snapshot!!.storageAreas,
-            suppliers = snapshot!!.suppliers,
-            onDismiss = { showStockInDialog = false },
-            onSubmit = { productId, supplierId, storageId, batchCode, qty, expiry, refCode, notes ->
-                repository.receiveStockBatch(
-                    productId = productId,
-                    supplierId = supplierId,
-                    storageId = storageId,
-                    batchCode = batchCode,
-                    quantity = qty,
-                    expiryDate = expiry,
-                    referenceCode = refCode,
-                    notes = notes
-                )
-                showStockInDialog = false
-                refreshTrigger++
-            }
-        )
-    }
-
-    // Stock Out / Movement Dialog
-    if (batchForStockOut != null && snapshot != null) {
-        StockOutDialog(
-            batches = snapshot!!.batches,
-            initialBatch = batchForStockOut!!,
-            onDismiss = { batchForStockOut = null },
-            onSubmit = { selectedBatch, txType, reason, qty, refCode, notes ->
-                repository.recordStockMovement(
-                    batchId = selectedBatch.batch.batchId,
-                    currentRemaining = selectedBatch.batch.quantityRemaining,
-                    transactionType = txType,
-                    reason = reason,
-                    quantity = qty,
-                    referenceCode = refCode,
-                    notes = notes
-                )
-                batchForStockOut = null
-                refreshTrigger++
-            }
-        )
-    }
-}
-
-// ========================================
-// UI SUB-COMPONENTS
-// ========================================
-
-
-@Composable
-private fun StockSummaryHero(data: StockSnapshot) {
-    val lowStockCount = data.batches.count { it.isLowStock }
-    val expiringCount = data.batches.count { it.isExpiringSoon }
-
-    SummaryStatsCard(
-        stats = listOf(
-            SummaryStat(
-                "ACTIVE BATCHES",
-                data.batches.size.toString()
-            ),
-            SummaryStat(
-                "LOW STOCK",
-                lowStockCount.toString(),
-                if (lowStockCount > 0)
-                    Color(0xFFFFBEC6)
-                else
-                    Color(0xFF98F0CD)
-            ),
-            SummaryStat(
-                "EXPIRING ≤7D",
-                expiringCount.toString(),
-                if (expiringCount > 0)
-                    Color(0xFFFDE68A)
-                else
-                    Color(0xFF98F0CD)
-            )
-        )
-    )
 }
 
 @Composable
-private fun TabPill(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
+private fun StockTabs(
+    showHistory: Boolean,
+    batchCount: Int,
+    historyCount: Int,
+    onSelect: (Boolean) -> Unit
 ) {
-    Surface(
-        onClick = onClick,
-        modifier = modifier,
-        color = if (selected) Navy else Color.Transparent,
-        shape = RoundedCornerShape(9.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White, FieldShape)
+            .padding(4.dp)
+            .selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Box(
-            modifier = Modifier.padding(vertical = 10.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = label,
-                color = if (selected) Color.White else TextMuted,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold
-            )
+        listOf(
+            false to "Active Batches ($batchCount)",
+            true to "Movements ($historyCount)"
+        ).forEach { (isHistory, label) ->
+            val selected = showHistory == isHistory
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 44.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (selected) Navy else Color.Transparent)
+                    .selectable(
+                        selected = selected,
+                        role = Role.Tab,
+                        onClick = { onSelect(isHistory) }
+                    )
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = label,
+                    fontSize = 13.sp,
+                    color = if (selected) Color.White else Muted,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun BatchItemCard(
+private fun BatchCard(
     item: EnrichedBatch,
-    onDispatchClick: () -> Unit
+    enabled: Boolean,
+    onMoveClick: () -> Unit
 ) {
     val unit = item.product?.unit ?: "units"
+    val qtyText = item.batch.quantityRemaining.toBigDecimal().stripTrailingZeros().toPlainString()
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+    StockCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = item.product?.productName ?: "Product #${item.batch.productId}",
-                        color = TextDark,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Batch: ${item.batch.batchCode} • ${item.storage?.storageName ?: "Unassigned"}",
-                        color = TextMuted,
-                        fontSize = 12.sp
-                    )
-                }
-
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    text = String.format(Locale.US, "%.2f %s", item.batch.quantityRemaining, unit),
-                    color = if (item.isLowStock) AlertRed else Navy,
+                    text = item.product?.productName ?: "Product #${item.batch.productId}",
+                    color = Ink,
                     fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "Batch ${item.batch.batchCode} · ${item.storage?.storageName ?: "Cold Storage"}",
+                    color = Muted,
+                    fontSize = 12.sp
                 )
             }
 
-            // Status Badges & Dispatch Action
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Surface(
+                color = Color(0xFFE8EEF6),
+                shape = RoundedCornerShape(8.dp)
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    StatusBadge(
-                        text = "Exp: ${item.batch.expiryDate}",
-                        color = if (item.isExpiringSoon) WarningOrange else TextMuted
-                    )
-                    if (item.isLowStock) {
-                        StatusBadge(text = "LOW STOCK", color = AlertRed)
-                    }
-                    if (!item.isLowStock && !item.isExpiringSoon) {
-                        StatusBadge(text = "OPTIMAL", color = NormalGreen)
-                    }
-                }
-
-                TextButton(
-                    onClick = onDispatchClick,
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                ) {
-                    Text(
-                        text = "Move / Out →",
-                        color = IceBlue,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
+                Text(
+                    text = "$qtyText $unit",
+                    color = Navy,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                )
             }
         }
-    }
-}
 
-@Composable
-private fun TransactionItemCard(tx: StockTransaction) {
-    val isInbound = tx.transactionType == "IN"
-    val badgeColor = when (tx.transactionType) {
-        "IN" -> NormalGreen
-        "OUT" -> Navy
-        "DISPOSAL" -> AlertRed
-        else -> WarningOrange
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
-    ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    StatusBadge(text = tx.transactionType, color = badgeColor)
-                    Text(
-                        text = tx.reason ?: "MOVEMENT",
-                        color = TextDark,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    text = "Batch #${tx.batchId}" +
-                            (tx.referenceCode?.let { " • Ref: $it" } ?: ""),
-                    color = TextMuted,
-                    fontSize = 12.sp
+                    text = "Expiry: ${item.batch.expiryDate}",
+                    color = if (item.isExpiringSoon) Color(0xFF972D41) else Muted,
+                    fontSize = 12.sp,
+                    fontWeight = if (item.isExpiringSoon) FontWeight.SemiBold else FontWeight.Normal
                 )
-                if (!tx.notes.isNullOrBlank()) {
-                    Text(text = tx.notes, color = TextMuted, fontSize = 11.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (item.isLowStock) {
+                        StatusChip("Low Stock", Color(0xFFFBE7EC), Color(0xFF972D41))
+                    }
+                    if (item.isExpired) {
+                        StatusChip("Expired", Color(0xFFFBE7EC), Color(0xFF972D41))
+                    } else if (item.isExpiringSoon) {
+                        StatusChip("Expiring Soon", Color(0xFFFEF3C7), Color(0xFF92400E))
+                    }
                 }
             }
 
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = (if (isInbound) "+" else "-") +
-                            String.format(Locale.US, "%.2f", tx.quantity),
-                    color = if (isInbound) NormalGreen else AlertRed,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = formatMovementTime(tx.recordedAt),
-                    color = TextMuted,
-                    fontSize = 10.sp
-                )
+            OutlinedButton(
+                onClick = onMoveClick,
+                enabled = enabled,
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Text("Move / Out", color = Navy, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             }
         }
     }
 }
 
 @Composable
-private fun StatusBadge(text: String, color: Color) {
-    Surface(
-        color = color.copy(alpha = 0.12f),
-        shape = RoundedCornerShape(50.dp)
-    ) {
+private fun TransactionCard(
+    tx: StockTransaction,
+    linkedBatch: EnrichedBatch?
+) {
+    val isIn = tx.transactionType == "IN"
+    val badgeBg = if (isIn) Color(0xFFE6F6EE) else Color(0xFFFBE7EC)
+    val badgeFg = if (isIn) Color(0xFF135E3D) else Color(0xFF972D41)
+    val qtyText = tx.quantity.toBigDecimal().stripTrailingZeros().toPlainString()
+    val unit = linkedBatch?.product?.unit ?: "units"
+
+    StockCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                StatusChip(tx.transactionType, badgeBg, badgeFg)
+                Text(
+                    text = "Movement #${tx.movementId}",
+                    color = Navy,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Text(
+                text = "${if (isIn) "+" else "-"}$qtyText $unit",
+                color = badgeFg,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
         Text(
-            text = text,
-            color = color,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            text = linkedBatch?.product?.productName ?: "Batch #${tx.batchId}",
+            color = Ink,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold
         )
+
+        val reasonClean = tx.reason?.replace('_', ' ')?.lowercase()
+            ?.replaceFirstChar { it.titlecase() } ?: "Stock movement"
+        Text(
+            text = "$reasonClean · ${formatMytTime(tx.recordedAt)}",
+            color = Muted,
+            fontSize = 12.sp
+        )
+
+        if (!tx.referenceCode.isNullOrBlank()) {
+            Text(text = "Ref: ${tx.referenceCode}", color = Muted, fontSize = 12.sp)
+        }
+        if (!tx.notes.isNullOrBlank()) {
+            Text(text = tx.notes, color = Muted, fontSize = 12.sp)
+        }
     }
 }
 
-@Composable
-private fun EmptyStateCard(message: String) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
-    ) {
-        Text(
-            text = message,
-            color = TextMuted,
-            modifier = Modifier.padding(20.dp)
-        )
-    }
-}
-
-// ========================================
-// STOCK-IN DIALOG
-// ========================================
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun StockInDialog(
     products: List<ProductItem>,
-    storageAreas: List<StorageArea>,
+    storages: List<StorageArea>,
     suppliers: List<SupplierItem>,
+    busy: Boolean,
     onDismiss: () -> Unit,
-    onSubmit: suspend (
-        productId: Long,
-        supplierId: Long?,
-        storageId: Long,
-        batchCode: String,
-        qty: Double,
-        expiry: String,
-        refCode: String?,
-        notes: String?
-    ) -> Unit
+    onSubmit: (Long, Long?, Long, String, Double, String, String?, String?) -> Unit
 ) {
-    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var selectedProduct by remember { mutableStateOf(products.firstOrNull()) }
-    var selectedStorage by remember { mutableStateOf(storageAreas.firstOrNull()) }
-    var selectedSupplier by remember { mutableStateOf(suppliers.firstOrNull()) }
-
+    var selectedStorage by remember { mutableStateOf(storages.firstOrNull()) }
+    var selectedSupplier by remember { mutableStateOf<SupplierItem?>(null) }
     var batchCode by remember {
-        mutableStateOf("BATCH-${LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE)}-${(10..99).random()}")
+        mutableStateOf("BCH-${LocalDate.now(MalaysiaZone).toString().replace("-", "")}")
     }
-    var quantityInput by remember { mutableStateOf("") }
-    var expiryDateInput by remember { mutableStateOf(LocalDate.now().plusMonths(3).toString()) }
+    var quantity by remember { mutableStateOf("") }
+    var expiryDate by remember { mutableStateOf(LocalDate.now(MalaysiaZone).plusDays(30).toString()) }
     var referenceCode by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
 
-    var isSaving by remember { mutableStateOf(false) }
-    var errorMsg by remember { mutableStateOf<String?>(null) }
-
-    var prodExpanded by remember { mutableStateOf(false) }
-    var storExpanded by remember { mutableStateOf(false) }
-    var suppExpanded by remember { mutableStateOf(false) }
+    val parsedQty = quantity.trim().toDoubleOrNull() ?: 0.0
+    val valid = selectedProduct != null && selectedStorage != null && batchCode.isNotBlank() && parsedQty > 0.0
 
     AlertDialog(
-        onDismissRequest = { if (!isSaving) onDismiss() },
-        title = { Text("Stock In (Receive Batch)", fontWeight = FontWeight.Bold) },
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text("Record Stock In", fontWeight = FontWeight.Bold, color = Ink) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                // Product Dropdown
-                ExposedDropdownMenuBox(
-                    expanded = prodExpanded,
-                    onExpandedChange = { prodExpanded = it }
-                ) {
-                    OutlinedTextField(
-                        value = selectedProduct?.productName ?: "Select Product",
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Product") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = prodExpanded) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth()
-                    )
-                    ExposedDropdownMenu(
-                        expanded = prodExpanded,
-                        onDismissRequest = { prodExpanded = false }
-                    ) {
-                        products.forEach { product ->
-                            DropdownMenuItem(
-                                text = { Text("${product.productName} (${product.productCode})") },
-                                onClick = {
-                                    selectedProduct = product
-                                    prodExpanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-
-                // Storage Area Dropdown
-                ExposedDropdownMenuBox(
-                    expanded = storExpanded,
-                    onExpandedChange = { storExpanded = it }
-                ) {
-                    OutlinedTextField(
-                        value = selectedStorage?.storageName ?: "Select Storage",
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Cold Storage Zone") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = storExpanded) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth()
-                    )
-                    ExposedDropdownMenu(
-                        expanded = storExpanded,
-                        onDismissRequest = { storExpanded = false }
-                    ) {
-                        storageAreas.forEach { area ->
-                            DropdownMenuItem(
-                                text = { Text(area.storageName) },
-                                onClick = {
-                                    selectedStorage = area
-                                    storExpanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-
-                // Supplier Dropdown
-                ExposedDropdownMenuBox(
-                    expanded = suppExpanded,
-                    onExpandedChange = { suppExpanded = it }
-                ) {
-                    OutlinedTextField(
-                        value = selectedSupplier?.supplierName ?: "None",
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Supplier") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = suppExpanded) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth()
-                    )
-                    ExposedDropdownMenu(
-                        expanded = suppExpanded,
-                        onDismissRequest = { suppExpanded = false }
-                    ) {
-                        suppliers.forEach { supplier ->
-                            DropdownMenuItem(
-                                text = { Text(supplier.supplierName) },
-                                onClick = {
-                                    selectedSupplier = supplier
-                                    suppExpanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-
+                DropdownSelector(
+                    label = "Product",
+                    items = products,
+                    selected = selectedProduct,
+                    itemLabel = { "${it.productName} (${it.unit})" },
+                    onSelect = { selectedProduct = it }
+                )
+                DropdownSelector(
+                    label = "Storage Zone",
+                    items = storages,
+                    selected = selectedStorage,
+                    itemLabel = { it.storageName },
+                    onSelect = { selectedStorage = it }
+                )
+                DropdownSelector(
+                    label = "Supplier (Optional)",
+                    items = suppliers,
+                    selected = selectedSupplier,
+                    itemLabel = { it.supplierName },
+                    onSelect = { selectedSupplier = it }
+                )
                 OutlinedTextField(
                     value = batchCode,
                     onValueChange = { batchCode = it },
                     label = { Text("Batch Code") },
                     singleLine = true,
+                    shape = FieldShape,
                     modifier = Modifier.fillMaxWidth()
                 )
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = quantityInput,
-                        onValueChange = { quantityInput = it },
-                        label = { Text("Quantity") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                    OutlinedTextField(
-                        value = expiryDateInput,
-                        onValueChange = { expiryDateInput = it },
-                        label = { Text("Expiry (YYYY-MM-DD)") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1.2f)
-                    )
+                OutlinedTextField(
+                    value = quantity,
+                    onValueChange = { quantity = it },
+                    label = { Text("Quantity (${selectedProduct?.unit ?: "units"})") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    shape = FieldShape,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedButton(
+                    onClick = {
+                        val init = runCatching { LocalDate.parse(expiryDate) }.getOrElse { LocalDate.now(MalaysiaZone) }
+                        DatePickerDialog(
+                            context,
+                            { _, y, m, d -> expiryDate = LocalDate.of(y, m + 1, d).toString() },
+                            init.year,
+                            init.monthValue - 1,
+                            init.dayOfMonth
+                        ).show()
+                    },
+                    shape = FieldShape,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    val label = runCatching { LocalDate.parse(expiryDate).format(DateLabelFormat) }.getOrDefault(expiryDate)
+                    Text("Expiry Date: $label", color = Ink)
                 }
-
                 OutlinedTextField(
                     value = referenceCode,
                     onValueChange = { referenceCode = it },
-                    label = { Text("Reference / DO No. (Optional)") },
+                    label = { Text("PO / Reorder Reference (Optional)") },
                     singleLine = true,
+                    shape = FieldShape,
                     modifier = Modifier.fillMaxWidth()
                 )
-
                 OutlinedTextField(
                     value = notes,
                     onValueChange = { notes = it },
                     label = { Text("Notes (Optional)") },
                     singleLine = true,
+                    shape = FieldShape,
                     modifier = Modifier.fillMaxWidth()
                 )
-
-                errorMsg?.let {
-                    Text(text = it, color = AlertRed, fontSize = 12.sp)
-                }
             }
         },
         confirmButton = {
             Button(
-                enabled = !isSaving,
+                enabled = !busy && valid,
                 onClick = {
-                    val qty = quantityInput.trim().toDoubleOrNull()
-                    val prod = selectedProduct
-                    val stor = selectedStorage
-                    if (prod == null || stor == null || qty == null || qty <= 0.0 || batchCode.isBlank()) {
-                        errorMsg = "Please complete Product, Storage, Batch Code, and valid Quantity."
-                        return@Button
-                    }
-                    scope.launch {
-                        isSaving = true
-                        errorMsg = null
-                        try {
-                            onSubmit(
-                                prod.productId,
-                                selectedSupplier?.supplierId,
-                                stor.storageId,
-                                batchCode,
-                                qty,
-                                expiryDateInput,
-                                referenceCode,
-                                notes
-                            )
-                        } catch (e: Exception) {
-                            errorMsg = e.message ?: "Failed to save batch."
-                        } finally {
-                            isSaving = false
-                        }
-                    }
+                    val p = selectedProduct ?: return@Button
+                    val s = selectedStorage ?: return@Button
+                    onSubmit(
+                        p.productId,
+                        selectedSupplier?.supplierId,
+                        s.storageId,
+                        batchCode,
+                        parsedQty,
+                        expiryDate,
+                        referenceCode,
+                        notes
+                    )
                 }
             ) {
-                Text(if (isSaving) "Saving..." else "Confirm Stock In")
+                Text(if (busy) "Saving…" else "Save Stock In")
             }
         },
         dismissButton = {
-            TextButton(enabled = !isSaving, onClick = onDismiss) {
-                Text("Cancel")
-            }
+            TextButton(enabled = !busy, onClick = onDismiss) { Text("Cancel") }
         }
     )
 }
 
-// ========================================
-// STOCK-OUT / MOVEMENT DIALOG
-// ========================================
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun StockOutDialog(
     batches: List<EnrichedBatch>,
     initialBatch: EnrichedBatch,
+    busy: Boolean,
     onDismiss: () -> Unit,
-    onSubmit: suspend (
-        selectedBatch: EnrichedBatch,
-        txType: String,
-        reason: String,
-        qty: Double,
-        refCode: String?,
-        notes: String?
-    ) -> Unit
+    onSubmit: (EnrichedBatch, String, String, Double, String?, String?) -> Unit
 ) {
-    val scope = rememberCoroutineScope()
     var selectedBatch by remember { mutableStateOf(initialBatch) }
     var txType by remember { mutableStateOf("OUT") }
     var reason by remember { mutableStateOf("SALE_DISPATCH") }
-    var quantityInput by remember { mutableStateOf("") }
+    var quantity by remember { mutableStateOf("") }
     var referenceCode by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
 
-    var isSaving by remember { mutableStateOf(false) }
-    var errorMsg by remember { mutableStateOf<String?>(null) }
-    var batchExpanded by remember { mutableStateOf(false) }
-    var typeExpanded by remember { mutableStateOf(false) }
-
-    val movementOptions = listOf(
-        Triple("OUT", "SALE_DISPATCH", "Stock Out (Dispatch)"),
-        Triple("DISPOSAL", "SPOILED", "Disposal (Spoiled)"),
-        Triple("DISPOSAL", "EXPIRED", "Disposal (Expired)"),
-        Triple("ADJUSTMENT", "INVENTORY_AUDIT", "Audit Adjustment (Set Exact Qty)")
-    )
+    val parsedQty = quantity.trim().toDoubleOrNull() ?: 0.0
+    val withinLimit = txType == "ADJUSTMENT" || parsedQty <= selectedBatch.batch.quantityRemaining
+    val valid = parsedQty > 0.0 && withinLimit
 
     AlertDialog(
-        onDismissRequest = { if (!isSaving) onDismiss() },
-        title = { Text("Record Stock Movement", fontWeight = FontWeight.Bold) },
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text("Record Stock Movement", fontWeight = FontWeight.Bold, color = Ink) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                // Batch Selector
-                ExposedDropdownMenuBox(
-                    expanded = batchExpanded,
-                    onExpandedChange = { batchExpanded = it }
-                ) {
-                    OutlinedTextField(
-                        value = "${selectedBatch.product?.productName ?: "Batch"} (${selectedBatch.batch.batchCode})",
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Select Batch (Rem: ${selectedBatch.batch.quantityRemaining})") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = batchExpanded) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth()
-                    )
-                    ExposedDropdownMenu(
-                        expanded = batchExpanded,
-                        onDismissRequest = { batchExpanded = false }
-                    ) {
-                        batches.forEach { item ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text("${item.product?.productName} • ${item.batch.batchCode} (Rem: ${item.batch.quantityRemaining})")
-                                },
-                                onClick = {
-                                    selectedBatch = item
-                                    batchExpanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-
-                // Movement Type & Reason Selector
-                ExposedDropdownMenuBox(
-                    expanded = typeExpanded,
-                    onExpandedChange = { typeExpanded = it }
-                ) {
-                    OutlinedTextField(
-                        value = "$txType — $reason",
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Movement Type & Reason") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeExpanded) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth()
-                    )
-                    ExposedDropdownMenu(
-                        expanded = typeExpanded,
-                        onDismissRequest = { typeExpanded = false }
-                    ) {
-                        movementOptions.forEach { (type, rsn, label) ->
-                            DropdownMenuItem(
-                                text = { Text(label) },
-                                onClick = {
-                                    txType = type
-                                    reason = rsn
-                                    typeExpanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-
-                OutlinedTextField(
-                    value = quantityInput,
-                    onValueChange = { quantityInput = it },
-                    label = {
-                        Text(
-                            if (txType == "ADJUSTMENT") "New Exact Quantity"
-                            else "Quantity to Deduct (Max ${selectedBatch.batch.quantityRemaining})"
-                        )
+                DropdownSelector(
+                    label = "Batch",
+                    items = batches,
+                    selected = selectedBatch,
+                    itemLabel = {
+                        "${it.product?.productName ?: "Product"} · ${it.batch.batchCode} (${it.batch.quantityRemaining})"
                     },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    onSelect = { selectedBatch = it }
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("OUT" to "Stock Out", "DISPOSAL" to "Disposal", "ADJUSTMENT" to "Adjust").forEach { (type, label) ->
+                        FilterChip(
+                            selected = txType == type,
+                            onClick = {
+                                txType = type
+                                reason = when (type) {
+                                    "OUT" -> "SALE_DISPATCH"
+                                    "DISPOSAL" -> "EXPIRED"
+                                    else -> "INVENTORY_AUDIT"
+                                }
+                            },
+                            label = { Text(label, fontSize = 12.sp) }
+                        )
+                    }
+                }
+                OutlinedTextField(
+                    value = quantity,
+                    onValueChange = { quantity = it },
+                    label = {
+                        val rem = selectedBatch.batch.quantityRemaining
+                        Text(if (txType == "ADJUSTMENT") "New Exact Quantity" else "Quantity (Max: $rem)")
+                    },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    shape = FieldShape,
                     modifier = Modifier.fillMaxWidth()
                 )
-
+                if (!withinLimit && parsedQty > 0.0) {
+                    Text(
+                        text = "Exceeds available batch stock (${selectedBatch.batch.quantityRemaining}).",
+                        color = MaterialTheme.colorScheme.error,
+                        fontSize = 12.sp
+                    )
+                }
                 OutlinedTextField(
                     value = referenceCode,
                     onValueChange = { referenceCode = it },
-                    label = { Text("Reference / Invoice No. (Optional)") },
+                    label = { Text("Reference Code (Optional)") },
                     singleLine = true,
+                    shape = FieldShape,
                     modifier = Modifier.fillMaxWidth()
                 )
-
                 OutlinedTextField(
                     value = notes,
                     onValueChange = { notes = it },
                     label = { Text("Notes (Optional)") },
                     singleLine = true,
+                    shape = FieldShape,
                     modifier = Modifier.fillMaxWidth()
                 )
-
-                errorMsg?.let {
-                    Text(text = it, color = AlertRed, fontSize = 12.sp)
-                }
             }
         },
         confirmButton = {
             Button(
-                enabled = !isSaving,
+                enabled = !busy && valid,
                 onClick = {
-                    val qty = quantityInput.trim().toDoubleOrNull()
-                    if (qty == null || qty <= 0.0) {
-                        errorMsg = "Enter a valid positive quantity."
-                        return@Button
-                    }
-                    if (txType != "ADJUSTMENT" && qty > selectedBatch.batch.quantityRemaining) {
-                        errorMsg = "Exceeds remaining batch stock (${selectedBatch.batch.quantityRemaining})."
-                        return@Button
-                    }
-                    scope.launch {
-                        isSaving = true
-                        errorMsg = null
-                        try {
-                            onSubmit(selectedBatch, txType, reason, qty, referenceCode, notes)
-                        } catch (e: Exception) {
-                            errorMsg = e.message ?: "Failed to record movement."
-                        } finally {
-                            isSaving = false
-                        }
-                    }
+                    onSubmit(selectedBatch, txType, reason, parsedQty, referenceCode, notes)
                 }
             ) {
-                Text(if (isSaving) "Saving..." else "Submit Movement")
+                Text(if (busy) "Saving…" else "Confirm")
             }
         },
         dismissButton = {
-            TextButton(enabled = !isSaving, onClick = onDismiss) {
-                Text("Cancel")
-            }
+            TextButton(enabled = !busy, onClick = onDismiss) { Text("Cancel") }
         }
     )
 }
 
-private fun formatMovementTime(value: String): String {
-    return runCatching {
-        OffsetDateTime.parse(value)
-            .atZoneSameInstant(ZoneId.systemDefault())
-            .format(DateTimeFormatter.ofPattern("dd MMM, HH:mm", Locale.ENGLISH))
-    }.getOrElse { value }
+@Composable
+private fun <T> DropdownSelector(
+    label: String,
+    items: List<T>,
+    selected: T?,
+    itemLabel: (T) -> String,
+    onSelect: (T) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val width = maxWidth
+        OutlinedButton(
+            onClick = { expanded = true },
+            enabled = items.isNotEmpty(),
+            shape = FieldShape,
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(label, color = Muted, fontSize = 10.sp)
+                Text(
+                    text = selected?.let(itemLabel) ?: "Select $label",
+                    color = Ink,
+                    fontSize = 13.sp
+                )
+            }
+            Text(if (expanded) "▴" else "▾", color = Muted)
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .width(width)
+                .heightIn(max = 260.dp)
+        ) {
+            items.forEach { entry ->
+                DropdownMenuItem(
+                    text = { Text(itemLabel(entry)) },
+                    onClick = {
+                        expanded = false
+                        onSelect(entry)
+                    }
+                )
+            }
+        }
+    }
 }
+
+@Composable
+private fun StatusChip(text: String, bg: Color, fg: Color) {
+    Text(
+        text = text,
+        color = fg,
+        fontSize = 11.sp,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier
+            .background(bg, RoundedCornerShape(8.dp))
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+    )
+}
+
+@Composable
+private fun StockCard(content: @Composable ColumnScope.() -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = Color.White,
+        shape = CardShape
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            content = content
+        )
+    }
+}
+
+private fun formatMytTime(raw: String): String =
+    runCatching {
+        OffsetDateTime.parse(raw).toInstant().atZone(MalaysiaZone).format(TimeFormat) + " MYT"
+    }.getOrElse {
+        runCatching {
+            Instant.parse(raw).atZone(MalaysiaZone).format(TimeFormat) + " MYT"
+        }.getOrDefault(raw)
+    }

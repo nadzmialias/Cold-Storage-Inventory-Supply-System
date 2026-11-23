@@ -1,12 +1,16 @@
 package com.csiss.inventory.data
 
-import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.time.LocalDate
+import java.time.ZoneId
 
 // =====================================
 // 1. MASTER & BATCH MODELS
@@ -158,8 +162,15 @@ data class EnrichedBatch(
 
     val isExpiringSoon: Boolean
         get() = runCatching {
+            val today = LocalDate.now(ZoneId.of("Asia/Kuala_Lumpur"))
             val exp = LocalDate.parse(batch.expiryDate)
-            !exp.isAfter(LocalDate.now().plusDays(7))
+            !exp.isAfter(today.plusDays(7))
+        }.getOrDefault(false)
+
+    val isExpired: Boolean
+        get() = runCatching {
+            val today = LocalDate.now(ZoneId.of("Asia/Kuala_Lumpur"))
+            LocalDate.parse(batch.expiryDate).isBefore(today)
         }.getOrDefault(false)
 }
 
@@ -180,88 +191,110 @@ class StockRepository {
     private val client
         get() = SupabaseClientProvider.client
 
-    suspend fun loadLive(): StockSnapshot {
-        val products = client.from("products")
-            .select(
-                columns = Columns.raw(
-                    "product_id,product_code,product_name,category,unit,min_stock_level,is_active"
-                )
-            ) {
-                filter { eq("is_active", true) }
-                order("product_name", Order.ASCENDING)
+    suspend fun loadLive(): StockSnapshot = withContext(Dispatchers.IO) {
+        coroutineScope {
+            val productsDeferred = async {
+                client.from("products")
+                    .select(
+                        columns = Columns.raw(
+                            "product_id,product_code,product_name,category,unit,min_stock_level,is_active"
+                        )
+                    ) {
+                        filter { eq("is_active", true) }
+                        order("product_name", Order.ASCENDING)
+                    }
+                    .decodeList<ProductItem>()
             }
-            .decodeList<ProductItem>()
 
-        val storages = client.from("storage_areas")
-            .select(
-                columns = Columns.raw(
-                    "storage_id,storage_name,min_temperature,max_temperature"
-                )
-            ) {
-                filter { eq("is_active", true) }
+            val storagesDeferred = async {
+                client.from("storage_areas")
+                    .select(
+                        columns = Columns.raw(
+                            "storage_id,storage_name,min_temperature,max_temperature"
+                        )
+                    ) {
+                        filter { eq("is_active", true) }
+                        order("storage_id", Order.ASCENDING)
+                    }
+                    .decodeList<StorageArea>()
             }
-            .decodeList<StorageArea>()
 
-        val suppliers = client.from("suppliers")
-            .select(
-                columns = Columns.raw(
-                    "supplier_id,supplier_name,is_active"
-                )
-            ) {
-                filter { eq("is_active", true) }
+            val suppliersDeferred = async {
+                client.from("suppliers")
+                    .select(
+                        columns = Columns.raw(
+                            "supplier_id,supplier_name,is_active"
+                        )
+                    ) {
+                        filter { eq("is_active", true) }
+                        order("supplier_name", Order.ASCENDING)
+                    }
+                    .decodeList<SupplierItem>()
             }
-            .decodeList<SupplierItem>()
 
-        val rawBatches = client.from("inventory_batches")
-            .select(
-                columns = Columns.raw(
-                    "batch_id,product_id,supplier_id,storage_id,batch_code," +
-                            "quantity_remaining,expiry_date,received_at"
-                )
-            ) {
-                filter { gt("quantity_remaining", 0.0) }
-                order("expiry_date", Order.ASCENDING)
+            val batchesDeferred = async {
+                client.from("inventory_batches")
+                    .select(
+                        columns = Columns.raw(
+                            "batch_id,product_id,supplier_id,storage_id,batch_code," +
+                                    "quantity_remaining,expiry_date,received_at"
+                        )
+                    ) {
+                        filter { gt("quantity_remaining", 0.0) }
+                        order("expiry_date", Order.ASCENDING)
+                    }
+                    .decodeList<InventoryBatch>()
             }
-            .decodeList<InventoryBatch>()
 
-        val transactions = client.from("stock_transactions")
-            .select(
-                columns = Columns.raw(
-                    "movement_id,batch_id,user_id,transaction_type,reason," +
-                            "quantity,reference_code,notes,recorded_at"
-                )
-            ) {
-                order("recorded_at", Order.DESCENDING)
-                limit(30)
+            val transactionsDeferred = async {
+                client.from("stock_transactions")
+                    .select(
+                        columns = Columns.raw(
+                            "movement_id,batch_id,user_id,transaction_type,reason," +
+                                    "quantity,reference_code,notes,recorded_at"
+                        )
+                    ) {
+                        order("recorded_at", Order.DESCENDING)
+                        limit(50)
+                    }
+                    .decodeList<StockTransaction>()
             }
-            .decodeList<StockTransaction>()
 
-        val productMap = products.associateBy { it.productId }
-        val storageMap = storages.associateBy { it.storageId }
-        val supplierMap = suppliers.associateBy { it.supplierId }
+            val products = productsDeferred.await()
+            val storages = storagesDeferred.await()
+            val suppliers = suppliersDeferred.await()
+            val rawBatches = batchesDeferred.await()
+            val transactions = transactionsDeferred.await()
 
-        val enriched = rawBatches.map { batch ->
-            EnrichedBatch(
-                batch = batch,
-                product = productMap[batch.productId],
-                storage = batch.storageId?.let { storageMap[it] },
-                supplier = batch.supplierId?.let { supplierMap[it] }
+            val productMap = products.associateBy { it.productId }
+            val storageMap = storages.associateBy { it.storageId }
+            val supplierMap = suppliers.associateBy { it.supplierId }
+
+            val enriched = rawBatches.map { batch ->
+                EnrichedBatch(
+                    batch = batch,
+                    product = productMap[batch.productId],
+                    storage = batch.storageId?.let { storageMap[it] },
+                    supplier = batch.supplierId?.let { supplierMap[it] }
+                )
+            }
+
+            StockSnapshot(
+                batches = enriched,
+                transactions = transactions,
+                products = products,
+                storageAreas = storages,
+                suppliers = suppliers
             )
         }
-
-        return StockSnapshot(
-            batches = enriched,
-            transactions = transactions,
-            products = products,
-            storageAreas = storages,
-            suppliers = suppliers
-        )
     }
 
     /**
-     * STOCK IN: Creates a new inventory_batches record and logs an 'IN' transaction
+     * STOCK IN: Creates a new inventory_batches record and logs an 'IN' transaction.
+     * Returns the created StockTransaction so its movement_id can be referenced in Reorder.
      */
     suspend fun receiveStockBatch(
+        userId: String?,
         productId: Long,
         supplierId: Long?,
         storageId: Long,
@@ -270,13 +303,11 @@ class StockRepository {
         expiryDate: String,
         referenceCode: String?,
         notes: String?
-    ) {
+    ): StockTransaction = withContext(Dispatchers.IO) {
         require(quantity > 0.0) { "Quantity must be greater than zero." }
         require(batchCode.isNotBlank()) { "Batch code is required." }
-
-        val currentUserId = runCatching {
-            client.auth.currentUserOrNull()?.id
-        }.getOrNull()
+        runCatching { LocalDate.parse(expiryDate.trim()) }
+            .getOrElse { throw IllegalArgumentException("Expiry date must be YYYY-MM-DD.") }
 
         val createdBatch = client.from("inventory_batches")
             .insert(
@@ -302,28 +333,37 @@ class StockRepository {
             .insert(
                 NewTransactionPayload(
                     batchId = createdBatch.batchId,
-                    userId = currentUserId,
+                    userId = userId,
                     transactionType = "IN",
                     reason = "PURCHASE_RECEIPT",
                     quantity = quantity,
                     referenceCode = referenceCode?.trim()?.ifBlank { null },
                     notes = notes?.trim()?.ifBlank { null }
                 )
-            )
+            ) {
+                select(
+                    columns = Columns.raw(
+                        "movement_id,batch_id,user_id,transaction_type,reason," +
+                                "quantity,reference_code,notes,recorded_at"
+                    )
+                )
+            }
+            .decodeSingle<StockTransaction>()
     }
 
     /**
      * STOCK OUT / DISPOSAL / ADJUSTMENT: Logs movement & updates quantity_remaining
      */
     suspend fun recordStockMovement(
+        userId: String?,
         batchId: Long,
         currentRemaining: Double,
         transactionType: String, // "OUT", "DISPOSAL", "ADJUSTMENT"
-        reason: String,          // "SALE_DISPATCH", "SPOILED", "EXPIRED", "INVENTORY_AUDIT"
+        reason: String,
         quantity: Double,
         referenceCode: String?,
         notes: String?
-    ) {
+    ) = withContext(Dispatchers.IO) {
         require(quantity > 0.0) { "Quantity must be greater than zero." }
 
         if (transactionType in listOf("OUT", "DISPOSAL")) {
@@ -332,15 +372,11 @@ class StockRepository {
             }
         }
 
-        val currentUserId = runCatching {
-            client.auth.currentUserOrNull()?.id
-        }.getOrNull()
-
         client.from("stock_transactions")
             .insert(
                 NewTransactionPayload(
                     batchId = batchId,
-                    userId = currentUserId,
+                    userId = userId,
                     transactionType = transactionType,
                     reason = reason,
                     quantity = quantity,

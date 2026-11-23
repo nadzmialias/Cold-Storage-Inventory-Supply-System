@@ -13,27 +13,26 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import kotlinx.coroutines.launch
-
 import androidx.core.view.WindowCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -42,28 +41,28 @@ import androidx.navigation.compose.rememberNavController
 import com.csiss.inventory.data.AlertRepository
 import com.csiss.inventory.data.SystemAlertRow
 import com.csiss.inventory.ui.auth.CsissAuthGate
+import com.csiss.inventory.ui.components.BootstrapExclamationSquare
+import com.csiss.inventory.ui.components.FluentuiSystemIconsAlert
+import com.csiss.inventory.ui.components.FluentuiSystemIconsBox
+import com.csiss.inventory.ui.components.FluentuiSystemIconsClipboardBulletListRtl
+import com.csiss.inventory.ui.components.FluentuiSystemIconsPerson
+import com.csiss.inventory.ui.components.FluentuiSystemIconsSupplier
+import com.csiss.inventory.ui.components.FluentuiSystemIconsTemperature
+import com.csiss.inventory.ui.components.HeroiconsUserGroup
+import com.csiss.inventory.ui.components.MaterialIconsInventory
+import com.csiss.inventory.ui.components.VscodeCodiconsGraphLine
+import com.csiss.inventory.ui.inventory.InventoryScreen
 import com.csiss.inventory.ui.notification.AlertNotificationHelper
 import com.csiss.inventory.ui.notification.NotificationScreen
 import com.csiss.inventory.ui.profile.ProfileScreen
+import com.csiss.inventory.ui.reorder.ReorderScreen
+import com.csiss.inventory.ui.report.ReportScreen
 import com.csiss.inventory.ui.stock.StockScreen
-import com.csiss.inventory.ui.inventory.InventoryScreen
 import com.csiss.inventory.ui.supplier.SupplierScreen
 import com.csiss.inventory.ui.temperature.TemperatureScreen
 import com.csiss.inventory.ui.theme.CSISSTheme
 import com.csiss.inventory.ui.user.UserManagementScreen
-import com.csiss.inventory.ui.components.FluentuiSystemIconsBox
-import com.csiss.inventory.ui.components.FluentuiSystemIconsTemperature
-import com.csiss.inventory.ui.components.FluentuiSystemIconsAlert
-import com.csiss.inventory.ui.components.FluentuiSystemIconsPerson
-import com.csiss.inventory.ui.components.FluentuiSystemIconsSupplier
-import androidx.compose.ui.graphics.vector.ImageVector
-import com.csiss.inventory.ui.components.HeroiconsUserGroup
-import com.csiss.inventory.ui.components.MaterialIconsInventory
-import com.csiss.inventory.ui.components.VscodeCodiconsGraphLine
-import com.csiss.inventory.ui.components.BootstrapExclamationSquare
-import com.csiss.inventory.ui.components.FluentuiSystemIconsClipboardBulletListRtl
-import com.csiss.inventory.ui.reorder.ReorderScreen
-import com.csiss.inventory.ui.report.ReportScreen
+import kotlinx.coroutines.launch
 
 sealed class Screen(val route: String) {
     object Stock : Screen("stock")
@@ -115,13 +114,12 @@ class MainActivity : ComponentActivity() {
                     var openAlertCount by remember { mutableIntStateOf(0) }
                     var showStartupAlertPopup by remember { mutableStateOf(false) }
                     var hasShownPopupForSession by remember(currentUser.fullName) {
-                        mutableStateOf(
-                            false
-                        )
+                        mutableStateOf(false)
                     }
                     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
                     val drawerScope = rememberCoroutineScope()
                     var showDrawerLogoutDialog by remember { mutableStateOf(false) }
+
                     // Request Android 13+ notification permission for system pop-up banners
                     val permissionLauncher = rememberLauncherForActivityResult(
                         contract = ActivityResultContracts.RequestPermission()
@@ -160,7 +158,6 @@ class MainActivity : ComponentActivity() {
                                 supplierSelected = currentRoute == Screen.Supplier.route,
                                 profileSelected = currentRoute == Screen.Profile.route,
                                 userSelected = currentRoute == Screen.UserManagement.route,
-
                                 onSupplierClick = {
                                     drawerScope.launch {
                                         drawerState.close()
@@ -213,7 +210,7 @@ class MainActivity : ComponentActivity() {
                                             launchSingleTop = true
                                         }
                                     }
-                                },
+                                }
                             )
                         }
                     ) {
@@ -221,7 +218,6 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier
                                 .fillMaxSize()
                                 .statusBarsPadding(),
-
                             topBar = {
                                 Surface(color = Color.White) {
                                     Box(
@@ -274,11 +270,11 @@ class MainActivity : ComponentActivity() {
                                 ) {
                                     NavigationBarItem(
                                         selected = currentRoute == Screen.Stock.route,
-                                        onClick = { 
+                                        onClick = {
                                             navController.navigate(Screen.Stock.route) {
                                                 popUpTo(navController.graph.startDestinationId)
                                                 launchSingleTop = true
-                                            } 
+                                            }
                                         },
                                         icon = {
                                             Icon(
@@ -290,7 +286,7 @@ class MainActivity : ComponentActivity() {
                                     )
                                     NavigationBarItem(
                                         selected = currentRoute == Screen.Inventory.route,
-                                        onClick = { 
+                                        onClick = {
                                             navController.navigate(Screen.Inventory.route) {
                                                 popUpTo(navController.graph.startDestinationId)
                                                 launchSingleTop = true
@@ -306,7 +302,7 @@ class MainActivity : ComponentActivity() {
                                     )
                                     NavigationBarItem(
                                         selected = currentRoute == Screen.Temperature.route,
-                                        onClick = { 
+                                        onClick = {
                                             navController.navigate(Screen.Temperature.route) {
                                                 popUpTo(navController.graph.startDestinationId)
                                                 launchSingleTop = true
@@ -351,7 +347,6 @@ class MainActivity : ComponentActivity() {
                                         label = { BottomNavLabel("Alerts") }
                                     )
                                 }
-
                             }
                         ) { innerPadding ->
                             NavHost(
@@ -365,7 +360,9 @@ class MainActivity : ComponentActivity() {
                                 popEnterTransition = { EnterTransition.None },
                                 popExitTransition = { ExitTransition.None }
                             ) {
-                                composable(Screen.Stock.route) { StockScreen() }
+                                composable(Screen.Stock.route) {
+                                    StockScreen(currentUserId = currentUser.userId)
+                                }
                                 composable(Screen.Temperature.route) {
                                     TemperatureScreen(
                                         canEditLimits = currentUser.role == "ADMIN",
@@ -381,6 +378,7 @@ class MainActivity : ComponentActivity() {
                                 composable(Screen.Alerts.route) {
                                     NotificationScreen(
                                         initialFilter = alertsFilter,
+                                        userRole = currentUser.role,
                                         onOpenCountChanged = { newCount ->
                                             openAlertCount = newCount
                                         }
@@ -429,7 +427,6 @@ class MainActivity : ComponentActivity() {
                             }
                         } // End Scaffold
                     } // End ModalNavigationDrawer
-
 
                     // Urgent Pop-Up Alert Dialog for Staff & Admin
                     if (showStartupAlertPopup && openAlerts.isNotEmpty()) {
@@ -506,7 +503,6 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-
                     if (showDrawerLogoutDialog) {
                         AlertDialog(
                             onDismissRequest = {
@@ -542,14 +538,11 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     }
-
-
                 }
             }
         }
     }
 }
-
 
 @Composable
 private fun BottomNavLabel(text: String) {
@@ -560,7 +553,6 @@ private fun BottomNavLabel(text: String) {
         overflow = TextOverflow.Ellipsis
     )
 }
-
 
 @Composable
 private fun CompactManagementDrawer(
@@ -576,7 +568,7 @@ private fun CompactManagementDrawer(
     reorderSelected: Boolean,
     onReorderClick: () -> Unit,
     reportsSelected: Boolean,
-    onReportsClick: () -> Unit,
+    onReportsClick: () -> Unit
 ) {
     val navy = Color(0xFF132945)
     val iceBlue = Color(0xFF34B9DB)
@@ -910,8 +902,6 @@ private fun ComingSoonDrawerRow(
         }
     }
 }
-
-
 
 @Composable
 fun Greeting(name: String, modifier: Modifier = Modifier) {
