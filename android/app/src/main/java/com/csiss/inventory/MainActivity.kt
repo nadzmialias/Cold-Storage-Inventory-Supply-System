@@ -58,6 +58,7 @@ import com.csiss.inventory.ui.components.VscodeCodiconsGraphLine
 import com.csiss.inventory.ui.components.BootstrapExclamationSquare
 import com.csiss.inventory.ui.components.FluentuiSystemIconsClipboardBulletListRtl
 import com.csiss.inventory.ui.reorder.ReorderScreen
+import com.csiss.inventory.ui.report.ReportScreen
 
 sealed class Screen(val route: String) {
     object Stock : Screen("stock")
@@ -68,6 +69,7 @@ sealed class Screen(val route: String) {
     object Supplier : Screen("supplier")
     object UserManagement : Screen("user_management")
     object Reorder : Screen("reorder")
+    object Reports : Screen("reports")
 }
 
 class MainActivity : ComponentActivity() {
@@ -178,6 +180,16 @@ class MainActivity : ComponentActivity() {
                                     drawerScope.launch {
                                         drawerState.close()
                                         navController.navigate(Screen.Reorder.route) {
+                                            popUpTo(Screen.Stock.route)
+                                            launchSingleTop = true
+                                        }
+                                    }
+                                },
+                                reportsSelected = currentRoute == Screen.Reports.route,
+                                onReportsClick = {
+                                    drawerScope.launch {
+                                        drawerState.close()
+                                        navController.navigate(Screen.Reports.route) {
                                             popUpTo(Screen.Stock.route)
                                             launchSingleTop = true
                                         }
@@ -408,6 +420,9 @@ class MainActivity : ComponentActivity() {
                                 composable(Screen.Reorder.route) {
                                     ReorderScreen()
                                 }
+                                composable(Screen.Reports.route) {
+                                    ReportScreen()
+                                }
                             }
                         } // End Scaffold
                     } // End ModalNavigationDrawer
@@ -557,6 +572,8 @@ private fun CompactManagementDrawer(
     onUserClick: () -> Unit,
     reorderSelected: Boolean,
     onReorderClick: () -> Unit,
+    reportsSelected: Boolean,
+    onReportsClick: () -> Unit,
 ) {
     val navy = Color(0xFF132945)
     val muted = Color(0xFF718198)
@@ -659,9 +676,21 @@ private fun CompactManagementDrawer(
                 imageVector = BootstrapExclamationSquare
             )
 
-            ComingSoonDrawerRow(
-                title = "Reports",
-                imageVector = VscodeCodiconsGraphLine
+            NavigationDrawerItem(
+                label = { Text("Reports") },
+                selected = reportsSelected,
+                onClick = onReportsClick,
+                icon = {
+                    Icon(
+                        imageVector = VscodeCodiconsGraphLine,
+                        contentDescription = null
+                    )
+                },
+                colors = NavigationDrawerItemDefaults.colors(
+                    selectedContainerColor = Color(0xFFE9DFF7),
+                    selectedTextColor = navy,
+                    selectedIconColor = navy
+                )
             )
 
 
