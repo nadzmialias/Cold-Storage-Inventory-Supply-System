@@ -8,6 +8,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -26,8 +28,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import kotlinx.coroutines.launch
-import androidx.compose.runtime.saveable.rememberSaveable
+
 import androidx.core.view.WindowCompat
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
 import com.csiss.inventory.data.AlertRepository
 import com.csiss.inventory.data.SystemAlertRow
 import com.csiss.inventory.ui.auth.CsissAuthGate
@@ -53,6 +59,17 @@ import com.csiss.inventory.ui.components.BootstrapExclamationSquare
 import com.csiss.inventory.ui.components.FluentuiSystemIconsClipboardBulletListRtl
 import com.csiss.inventory.ui.reorder.ReorderScreen
 
+sealed class Screen(val route: String) {
+    object Stock : Screen("stock")
+    object Inventory : Screen("inventory")
+    object Temperature : Screen("temperature")
+    object Alerts : Screen("alerts")
+    object Profile : Screen("profile")
+    object Supplier : Screen("supplier")
+    object UserManagement : Screen("user_management")
+    object Reorder : Screen("reorder")
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,8 +85,10 @@ class MainActivity : ComponentActivity() {
                     val context = LocalContext.current
                     val alertRepository = remember { AlertRepository() }
 
-                    // 0 = Stock, 1 = Temperature, 2 = Alerts, 3 = Profile,  3 = Profile, 4 = Inventory, 5 = Supplier
-                    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+                    val navController = rememberNavController()
+                    val navBackStackEntry by navController.currentBackStackEntryAsState()
+                    val currentRoute = navBackStackEntry?.destination?.route
+
                     var alertsFilter by remember { mutableIntStateOf(0) }
                     var openAlerts by remember { mutableStateOf<List<SystemAlertRow>>(emptyList()) }
                     var openAlertCount by remember { mutableIntStateOf(0) }
@@ -94,7 +113,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                     // Background check when user logs in or switches tabs
-                    LaunchedEffect(currentUser.fullName, selectedTab) {
+                    LaunchedEffect(currentUser.fullName, currentRoute) {
                         runCatching {
                             val allAlerts = alertRepository.loadAndSyncAlerts()
                             val activeList = allAlerts.filter { !it.isResolved }
@@ -117,20 +136,26 @@ class MainActivity : ComponentActivity() {
                             CompactManagementDrawer(
                                 userName = currentUser.fullName,
                                 role = currentUser.role,
-                                supplierSelected = selectedTab == 5,
-                                profileSelected = selectedTab == 3,
-                                userSelected = selectedTab == 6,
+                                supplierSelected = currentRoute == Screen.Supplier.route,
+                                profileSelected = currentRoute == Screen.Profile.route,
+                                userSelected = currentRoute == Screen.UserManagement.route,
 
                                 onSupplierClick = {
                                     drawerScope.launch {
                                         drawerState.close()
-                                        selectedTab = 5
+                                        navController.navigate(Screen.Supplier.route) {
+                                            popUpTo(Screen.Stock.route)
+                                            launchSingleTop = true
+                                        }
                                     }
                                 },
                                 onProfileClick = {
                                     drawerScope.launch {
                                         drawerState.close()
-                                        selectedTab = 3
+                                        navController.navigate(Screen.Profile.route) {
+                                            popUpTo(Screen.Stock.route)
+                                            launchSingleTop = true
+                                        }
                                     }
                                 },
                                 onLogoutClick = {
@@ -142,14 +167,20 @@ class MainActivity : ComponentActivity() {
                                 onUserClick = {
                                     drawerScope.launch {
                                         drawerState.close()
-                                        selectedTab = 6
+                                        navController.navigate(Screen.UserManagement.route) {
+                                            popUpTo(Screen.Stock.route)
+                                            launchSingleTop = true
+                                        }
                                     }
                                 },
-                                reorderSelected = selectedTab == 7,
+                                reorderSelected = currentRoute == Screen.Reorder.route,
                                 onReorderClick = {
                                     drawerScope.launch {
                                         drawerState.close()
-                                        selectedTab = 7
+                                        navController.navigate(Screen.Reorder.route) {
+                                            popUpTo(Screen.Stock.route)
+                                            launchSingleTop = true
+                                        }
                                     }
                                 },
                             )
@@ -162,29 +193,25 @@ class MainActivity : ComponentActivity() {
 
                             topBar = {
                                 Surface(color = Color.White) {
-                                    Row(
+                                    Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(start = 20.dp, end = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween
+                                            .padding(vertical = 4.dp),
+                                        contentAlignment = Alignment.Center
                                     ) {
-                                        Text(
-                                            text = "CSISS",
-                                            modifier = Modifier.padding(vertical = 14.dp),
-                                            color = Color(0xFF132945),
-                                            fontSize = 20.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
+                                        // Hamburger Menu (Left)
                                         IconButton(
                                             onClick = {
                                                 drawerScope.launch {
                                                     drawerState.open()
                                                 }
                                             },
-                                            modifier = Modifier.semantics {
-                                                contentDescription = "Open navigation menu"
-                                            }
+                                            modifier = Modifier
+                                                .align(Alignment.CenterStart)
+                                                .padding(start = 12.dp)
+                                                .semantics {
+                                                    contentDescription = "Open navigation menu"
+                                                }
                                         ) {
                                             Column(
                                                 modifier = Modifier.width(22.dp),
@@ -198,6 +225,15 @@ class MainActivity : ComponentActivity() {
                                                 }
                                             }
                                         }
+
+                                        // Title (Center)
+                                        Text(
+                                            text = "CSISS",
+                                            modifier = Modifier.padding(vertical = 10.dp),
+                                            color = Color(0xFF132945),
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
                                     }
                                 }
                             },
@@ -206,8 +242,13 @@ class MainActivity : ComponentActivity() {
                                     containerColor = Color.White
                                 ) {
                                     NavigationBarItem(
-                                        selected = selectedTab == 0,
-                                        onClick = { selectedTab = 0 },
+                                        selected = currentRoute == Screen.Stock.route,
+                                        onClick = { 
+                                            navController.navigate(Screen.Stock.route) {
+                                                popUpTo(Screen.Stock.route)
+                                                launchSingleTop = true
+                                            } 
+                                        },
                                         icon = {
                                             Icon(
                                                 imageVector = FluentuiSystemIconsBox,
@@ -217,8 +258,13 @@ class MainActivity : ComponentActivity() {
                                         label = { BottomNavLabel("Stock") }
                                     )
                                     NavigationBarItem(
-                                        selected = selectedTab == 4,
-                                        onClick = { selectedTab = 4 },
+                                        selected = currentRoute == Screen.Inventory.route,
+                                        onClick = { 
+                                            navController.navigate(Screen.Inventory.route) {
+                                                popUpTo(Screen.Stock.route)
+                                                launchSingleTop = true
+                                            }
+                                        },
                                         icon = {
                                             Icon(
                                                 imageVector = MaterialIconsInventory,
@@ -228,8 +274,13 @@ class MainActivity : ComponentActivity() {
                                         label = { BottomNavLabel("Inventory") }
                                     )
                                     NavigationBarItem(
-                                        selected = selectedTab == 1,
-                                        onClick = { selectedTab = 1 },
+                                        selected = currentRoute == Screen.Temperature.route,
+                                        onClick = { 
+                                            navController.navigate(Screen.Temperature.route) {
+                                                popUpTo(Screen.Stock.route)
+                                                launchSingleTop = true
+                                            }
+                                        },
                                         icon = {
                                             Icon(
                                                 imageVector = FluentuiSystemIconsTemperature,
@@ -239,10 +290,13 @@ class MainActivity : ComponentActivity() {
                                         label = { BottomNavLabel("Temp") }
                                     )
                                     NavigationBarItem(
-                                        selected = selectedTab == 2,
+                                        selected = currentRoute == Screen.Alerts.route,
                                         onClick = {
                                             alertsFilter = 0
-                                            selectedTab = 2
+                                            navController.navigate(Screen.Alerts.route) {
+                                                popUpTo(Screen.Stock.route)
+                                                launchSingleTop = true
+                                            }
                                         },
                                         icon = {
                                             BadgedBox(
@@ -266,8 +320,13 @@ class MainActivity : ComponentActivity() {
                                         label = { BottomNavLabel("Alerts") }
                                     )
                                     NavigationBarItem(
-                                        selected = selectedTab == 3,
-                                        onClick = { selectedTab = 3 },
+                                        selected = currentRoute == Screen.Profile.route,
+                                        onClick = { 
+                                            navController.navigate(Screen.Profile.route) {
+                                                popUpTo(Screen.Stock.route)
+                                                launchSingleTop = true
+                                            }
+                                        },
                                         icon = {
                                             Icon(
                                                 imageVector = FluentuiSystemIconsPerson,
@@ -280,60 +339,74 @@ class MainActivity : ComponentActivity() {
 
                             }
                         ) { innerPadding ->
-                            Box(
+                            NavHost(
+                                navController = navController,
+                                startDestination = Screen.Stock.route,
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .padding(innerPadding)
+                                    .padding(innerPadding),
+                                enterTransition = { EnterTransition.None },
+                                exitTransition = { ExitTransition.None },
+                                popEnterTransition = { EnterTransition.None },
+                                popExitTransition = { ExitTransition.None }
                             ) {
-                                when (selectedTab) {
-                                    0 -> StockScreen()
-                                    1 -> TemperatureScreen(
+                                composable(Screen.Stock.route) { StockScreen() }
+                                composable(Screen.Temperature.route) {
+                                    TemperatureScreen(
                                         canEditLimits = currentUser.role == "ADMIN",
                                         onOpenAlerts = {
                                             alertsFilter = 2
-                                            selectedTab = 2
+                                            navController.navigate(Screen.Alerts.route) {
+                                                popUpTo(Screen.Stock.route)
+                                                launchSingleTop = true
+                                            }
                                         }
                                     )
-
-                                    2 -> NotificationScreen(
+                                }
+                                composable(Screen.Alerts.route) {
+                                    NotificationScreen(
                                         initialFilter = alertsFilter,
                                         onOpenCountChanged = { newCount ->
                                             openAlertCount = newCount
                                         }
                                     )
-
-                                    3 -> ProfileScreen(
+                                }
+                                composable(Screen.Profile.route) {
+                                    ProfileScreen(
                                         user = currentUser,
                                         onLogout = onLogout
                                     )
-
-                                    4 -> InventoryScreen(
+                                }
+                                composable(Screen.Inventory.route) {
+                                    InventoryScreen(
                                         userRole = currentUser.role,
-                                        onHome = { selectedTab = 0 },
+                                        onHome = { navController.navigate(Screen.Stock.route) },
                                         onAlerts = {
                                             alertsFilter = 0
-                                            selectedTab = 2
+                                            navController.navigate(Screen.Alerts.route)
                                         },
-                                        onProfile = { selectedTab = 3 }
+                                        onProfile = { navController.navigate(Screen.Profile.route) }
                                     )
-
-                                    5 -> SupplierScreen(
-                                        onHome = { selectedTab = 0 },
+                                }
+                                composable(Screen.Supplier.route) {
+                                    SupplierScreen(
+                                        onHome = { navController.navigate(Screen.Stock.route) },
                                         onAlerts = {
                                             alertsFilter = 0
-                                            selectedTab = 2
+                                            navController.navigate(Screen.Alerts.route)
                                         },
-                                        onProfile = { selectedTab = 3 }
+                                        onProfile = { navController.navigate(Screen.Profile.route) }
                                     )
-
-                                    6 -> {
-                                        if (currentUser.role == "ADMIN") {
-                                            UserManagementScreen(
-                                                currentUserId = currentUser.userId
-                                            )
-                                        }
+                                }
+                                composable(Screen.UserManagement.route) {
+                                    if (currentUser.role == "ADMIN") {
+                                        UserManagementScreen(
+                                            currentUserId = currentUser.userId
+                                        )
                                     }
-                                    7 -> ReorderScreen()
+                                }
+                                composable(Screen.Reorder.route) {
+                                    ReorderScreen()
                                 }
                             }
                         } // End Scaffold
@@ -394,7 +467,10 @@ class MainActivity : ComponentActivity() {
                                     onClick = {
                                         showStartupAlertPopup = false
                                         alertsFilter = 0
-                                        selectedTab = 2
+                                        navController.navigate(Screen.Alerts.route) {
+                                            popUpTo(Screen.Stock.route)
+                                            launchSingleTop = true
+                                        }
                                     },
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = Color(0xFF132945),

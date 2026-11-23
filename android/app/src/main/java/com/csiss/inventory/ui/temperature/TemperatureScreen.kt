@@ -39,6 +39,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
 
+import androidx.lifecycle.viewmodel.compose.viewModel
+
 // CSISS color palette
 private val Navy = Color(0xFF132945)
 private val IceBlue = Color(0xFF34B9DB)
@@ -51,71 +53,20 @@ private val NormalGreen = Color(0xFF159C76)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TemperatureScreen(
+    viewModel: TemperatureViewModel = viewModel(),
     canEditLimits: Boolean = false,
     onOpenAlerts: () -> Unit = {}
 ) {
-    val repository = remember { TemperatureRepository() }
-    var snapshot by remember { mutableStateOf<TemperatureSnapshot?>(null) }
-    var loading by remember { mutableStateOf(true) }
-    var manualRefreshPending by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var refresh by remember { mutableIntStateOf(0) }
-    var currentTime by remember { mutableStateOf(Instant.now()) }
-    val scope = rememberCoroutineScope()
+    val uiState by viewModel.uiState.collectAsState()
+    
     var showLimitEditor by remember { mutableStateOf(false) }
-    var savingLimits by remember { mutableStateOf(false) }
-    var limitSaveError by remember { mutableStateOf<String?>(null) }
     val pullToRefreshState = rememberPullToRefreshState()
-    val requestRefresh: () -> Unit = {
-        if (!loading && !manualRefreshPending) {
-            manualRefreshPending = true
-            refresh++
-        }
-    }
-
-    var initialLoadComplete by remember { mutableStateOf(false) }
-
-
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(30_000L)
-            currentTime = Instant.now()
-        }
-    }
-
-    LaunchedEffect(refresh) {
-        val requestId = refresh
-        loading = true
-        try {
-            snapshot = repository.loadLive()
-            error = null
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            error = "Unable to retrieve temperature data. " +
-                    "Check your connection and login."
-        } finally {
-            if (requestId == refresh) {
-                loading = false
-                manualRefreshPending = false
-            }
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(20_000L)
-            refresh++
-        }
-    }
-
-
     val showRefreshIndicator =
-        manualRefreshPending || (loading && !initialLoadComplete)
+        uiState.manualRefreshPending || (uiState.isLoading && !uiState.isInitialLoadComplete)
 
     PullToRefreshBox(
         isRefreshing = showRefreshIndicator,
-        onRefresh = requestRefresh,
+        onRefresh = { viewModel.requestManualRefresh() },
         modifier = Modifier
             .fillMaxSize()
             .background(Background)
@@ -166,7 +117,7 @@ fun TemperatureScreen(
                 }
             }
 
-            snapshot?.let { data ->
+            uiState.snapshot?.let { data ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -174,8 +125,8 @@ fun TemperatureScreen(
                 ) {
                     SensorConnectionIndicator(
                         lastReadingAt = data.logs.firstOrNull()?.recordedAt,
-                        currentTime = currentTime,
-                        serverReachable = error == null
+                        currentTime = uiState.currentTime,
+                        serverReachable = uiState.error == null
                     )
                     AlertsStatusButton(
                         alertCount = data.alerts.count { alert ->
@@ -186,7 +137,7 @@ fun TemperatureScreen(
                 }
             }
 
-            error?.let {
+            uiState.error?.let {
                 Text(
                     it,
                     color = AlertRed,
@@ -194,8 +145,8 @@ fun TemperatureScreen(
                 )
             }
 
-            if (snapshot == null) {
-                TemperaturePlaceholderHero(isLoading = loading)
+            if (uiState.snapshot == null) {
+                TemperaturePlaceholderHero(isLoading = uiState.isLoading)
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -215,7 +166,7 @@ fun TemperatureScreen(
                 }
             }
 
-            snapshot?.let { data ->
+            uiState.snapshot?.let { data ->
                 TemperatureHero(data = data)
 
                 Row(
@@ -239,7 +190,7 @@ fun TemperatureScreen(
                 if (canEditLimits) {
                     Button(
                         onClick = {
-                            limitSaveError = null
+                            viewModel.clearLimitSaveError()
                             showLimitEditor = true
                         },
                         modifier = Modifier
@@ -351,41 +302,27 @@ fun TemperatureScreen(
         }
 
         if (showLimitEditor) {
-            snapshot?.let { data ->
+            uiState.snapshot?.let { data ->
 
                 EditTemperatureLimitsDialog(
                     storageName = data.storage.storageName,
                     currentMin = data.storage.minTemperature,
                     currentMax = data.storage.maxTemperature,
-                    isSaving = savingLimits,
-                    saveError = limitSaveError,
+                    isSaving = uiState.savingLimits,
+                    saveError = uiState.limitSaveError,
 
                     onDismiss = {
                         showLimitEditor = false
-                        limitSaveError = null
+                        viewModel.clearLimitSaveError()
                     },
 
                     onSave = { newMin, newMax ->
-                        scope.launch {
-                            savingLimits = true
-                            limitSaveError = null
-
-                            try {
-                                val updatedStorage = repository.updateLimits(
-                                    storageId = data.storage.storageId,
-                                    minimum = newMin,
-                                    maximum = newMax
-                                )
-
-                                snapshot = snapshot?.copy(storage = updatedStorage)
-                                showLimitEditor = false
-                            } catch (e: Exception) {
-                                limitSaveError =
-                                    "Unable to save limits. " +
-                                            "Check your Admin login and permissions."
-                            } finally {
-                                savingLimits = false
-                            }
+                        viewModel.updateLimits(
+                            storageId = data.storage.storageId,
+                            minimum = newMin,
+                            maximum = newMax
+                        ) {
+                            showLimitEditor = false
                         }
                     }
                 )

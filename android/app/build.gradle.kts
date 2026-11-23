@@ -90,4 +90,6 @@ dependencies {
     implementation("io.github.jan-tennert.supabase:storage-kt")
     implementation(libs.ktor.client.okhttp)
     implementation("androidx.compose.animation:animation")
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.navigation.compose)
 }
