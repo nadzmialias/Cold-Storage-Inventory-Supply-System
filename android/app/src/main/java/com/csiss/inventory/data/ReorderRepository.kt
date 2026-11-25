@@ -58,17 +58,17 @@ private data class ReorderRequester(val name: String? = null)
 internal class ReorderRepository {
     private val client = SupabaseClientProvider.client
 
-    suspend fun options() = client.postgrest.rpc("csiss_reorder_options").decodeAs<ReorderOptions>()
+    suspend fun options() = client.postgrest.rpc("reorder_options").decodeAs<ReorderOptions>()
 
-    suspend fun requests() = client.from("csiss_reorders").select()
+    suspend fun requests() = client.from("reorders").select()
         .decodeList<Reorder>().sortedByDescending { it.id }
 
     suspend fun requesterName(id: Long): String? =
-        client.postgrest.rpc("csiss_reorder_requester", buildJsonObject {
+        client.postgrest.rpc("reorder_requester", buildJsonObject {
             put("p_reorder_id", JsonPrimitive(id))
         }).decodeAs<ReorderRequester>().name
 
-    suspend fun history(id: Long) = client.from("csiss_reorder_history").select {
+    suspend fun history(id: Long) = client.from("reorder_history").select {
         filter { eq("reorder_id", id) }
     }.decodeList<ReorderHistory>().sortedByDescending { it.id }
 
@@ -76,7 +76,7 @@ internal class ReorderRepository {
         request: Reorder?, product: Long, supplier: Long, quantity: String,
         priority: String, additionalReason: String
     ) {
-        client.postgrest.rpc("csiss_reorder_save_v2", buildJsonObject {
+        client.postgrest.rpc("reorder_save_v2", buildJsonObject {
             put("p_id", request?.id?.let { JsonPrimitive(it) } ?: JsonNull)
             put("p_product", JsonPrimitive(product))
             put("p_supplier", JsonPrimitive(supplier))
@@ -90,7 +90,7 @@ internal class ReorderRepository {
     }
 
     suspend fun transition(id: Long, status: String, note: String, receipt: Long?) {
-        client.postgrest.rpc("csiss_reorder_transition", buildJsonObject {
+        client.postgrest.rpc("reorder_transition", buildJsonObject {
             put("p_id", JsonPrimitive(id))
             put("p_status", JsonPrimitive(status))
             put("p_note", JsonPrimitive(note))
