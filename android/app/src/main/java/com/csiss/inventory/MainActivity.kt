@@ -34,6 +34,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
+import com.csiss.inventory.ui.claims.ClaimScreen
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -64,6 +65,7 @@ import com.csiss.inventory.ui.theme.CSISSTheme
 import com.csiss.inventory.ui.user.UserManagementScreen
 import kotlinx.coroutines.launch
 
+
 sealed class Screen(val route: String) {
     object Stock : Screen("stock")
     object Inventory : Screen("inventory")
@@ -74,6 +76,7 @@ sealed class Screen(val route: String) {
     object UserManagement : Screen("user_management")
     object Reorder : Screen("reorder")
     object Reports : Screen("reports")
+    object Claims : Screen("claims")
 }
 
 class MainActivity : ComponentActivity() {
@@ -206,6 +209,16 @@ class MainActivity : ComponentActivity() {
                                     drawerScope.launch {
                                         drawerState.close()
                                         navController.navigate(Screen.Reports.route) {
+                                            popUpTo(navController.graph.startDestinationId)
+                                            launchSingleTop = true
+                                        }
+                                    }
+                                },
+                                claimsSelected = currentRoute == Screen.Claims.route,
+                                onClaimsClick = {
+                                    drawerScope.launch {
+                                        drawerState.close()
+                                        navController.navigate(Screen.Claims.route) {
                                             popUpTo(navController.graph.startDestinationId)
                                             launchSingleTop = true
                                         }
@@ -419,6 +432,9 @@ class MainActivity : ComponentActivity() {
                                 composable(Screen.Reorder.route) {
                                     ReorderScreen()
                                 }
+                                composable(Screen.Claims.route) {
+                                    ClaimScreen(modifier = Modifier.fillMaxSize())
+                                }
                                 composable(Screen.Reports.route) {
                                     ReportScreen()
                                 }
@@ -566,7 +582,9 @@ private fun CompactManagementDrawer(
     reorderSelected: Boolean,
     onReorderClick: () -> Unit,
     reportsSelected: Boolean,
-    onReportsClick: () -> Unit
+    onReportsClick: () -> Unit,
+    claimsSelected: Boolean,
+    onClaimsClick: () -> Unit
 ) {
     val navy = Color(0xFF132945)
     val ink = Color(0xFF182B48)
@@ -693,9 +711,11 @@ private fun CompactManagementDrawer(
                     onClick = onReportsClick
                 )
 
-                ComingSoonDrawerRow(
-                    title = "Supplier Claims",
-                    imageVector = BootstrapExclamationSquare
+                DrawerMenuItem(
+                    label = "Supplier Claims",
+                    icon = BootstrapExclamationSquare,
+                    selected = claimsSelected,
+                    onClick = onClaimsClick
                 )
 
                 if (role == "ADMIN") {

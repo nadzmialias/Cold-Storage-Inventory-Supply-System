@@ -1,4 +1,3 @@
-
 package com.csiss.inventory.data
 
 import com.csiss.inventory.BuildConfig

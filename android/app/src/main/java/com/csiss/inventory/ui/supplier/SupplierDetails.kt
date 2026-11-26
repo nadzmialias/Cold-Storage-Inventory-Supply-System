@@ -26,7 +26,7 @@ internal fun SupplierDetails(
         contentPadding = PaddingValues(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Back & Screen Title
+        // Back Button & Screen Title
         item {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 TextButton(
