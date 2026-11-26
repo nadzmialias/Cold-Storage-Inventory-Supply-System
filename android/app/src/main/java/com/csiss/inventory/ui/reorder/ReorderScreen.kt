@@ -32,11 +32,13 @@ import com.csiss.inventory.ui.inventory.Product
 import com.csiss.inventory.ui.inventory.ProductCard
 import com.csiss.inventory.ui.inventory.StockStatus
 import com.csiss.inventory.ui.inventory.status
+import com.csiss.inventory.ui.components.CsissLightRefreshIndicator
 import com.csiss.inventory.ui.components.SummaryStat
 import com.csiss.inventory.ui.components.SummaryStatsCard
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
@@ -139,6 +141,8 @@ fun ReorderScreen(modifier: Modifier = Modifier) {
             else -> false
         }
 
+    val pullToRefreshState = rememberPullToRefreshState()
+
     MaterialTheme(
         colorScheme = lightColorScheme(
             primary = Navy,
@@ -155,7 +159,14 @@ fun ReorderScreen(modifier: Modifier = Modifier) {
                 }
             },
             modifier = Modifier.fillMaxSize(),
-            indicator = {}
+            state = pullToRefreshState,
+            indicator = {
+                CsissLightRefreshIndicator(
+                    state = pullToRefreshState,
+                    isRefreshing = busy,
+                    modifier = Modifier.align(Alignment.TopCenter)
+                )
+            }
         ) {
             LazyColumn(
                 state = when {
@@ -199,10 +210,6 @@ fun ReorderScreen(modifier: Modifier = Modifier) {
                             )
                         }
                     }
-                }
-
-                if (busy) {
-                    item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
                 }
 
                 error?.let { message ->

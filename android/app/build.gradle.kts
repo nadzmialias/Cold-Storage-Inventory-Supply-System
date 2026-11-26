@@ -8,9 +8,10 @@ plugins {
 
 
 val localProperties = Properties().apply {
-    rootProject.file("local.properties")
-        .inputStream()
-        .use { load(it) }
+    val file = rootProject.file("local.properties")
+    if (file.exists()) {
+        file.inputStream().use { load(it) }
+    }
 }
 
 val supabaseUrl =
@@ -87,9 +88,9 @@ dependencies {
     implementation(platform(libs.supabase.bom))
     implementation(libs.supabase.auth)
     implementation(libs.supabase.postgrest)
-    implementation("io.github.jan-tennert.supabase:storage-kt")
+    implementation(libs.supabase.storage)
     implementation(libs.ktor.client.okhttp)
-    implementation("androidx.compose.animation:animation")
+    implementation(libs.androidx.compose.animation)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.navigation.compose)
 }

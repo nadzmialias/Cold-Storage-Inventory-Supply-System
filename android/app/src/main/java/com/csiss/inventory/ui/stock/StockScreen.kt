@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,6 +30,7 @@ import com.csiss.inventory.data.StockSnapshot
 import com.csiss.inventory.data.StockTransaction
 import com.csiss.inventory.data.StorageArea
 import com.csiss.inventory.data.SupplierItem
+import com.csiss.inventory.ui.components.CsissLightRefreshIndicator
 import com.csiss.inventory.ui.components.SummaryStat
 import com.csiss.inventory.ui.components.SummaryStatsCard
 import kotlinx.coroutines.CancellationException
@@ -106,6 +108,7 @@ fun StockScreen(
     val transactions = snapshot?.transactions.orEmpty()
     val lowCount = batches.count { it.isLowStock }
     val expiringCount = batches.count { it.isExpiringSoon }
+    val pullToRefreshState = rememberPullToRefreshState()
 
     MaterialTheme(
         colorScheme = lightColorScheme(
@@ -119,14 +122,21 @@ fun StockScreen(
             isRefreshing = busy,
             onRefresh = { runTask { reload() } },
             modifier = modifier.fillMaxSize(),
-            indicator = {}
+            state = pullToRefreshState,
+            indicator = {
+                CsissLightRefreshIndicator(
+                    state = pullToRefreshState,
+                    isRefreshing = busy,
+                    modifier = Modifier.align(Alignment.TopCenter)
+                )
+            }
         ) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Background),
                 contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // Header
                 item {
@@ -145,10 +155,6 @@ fun StockScreen(
                             fontWeight = FontWeight.SemiBold
                         )
                     }
-                }
-
-                if (busy) {
-                    item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
                 }
 
                 bannerMessage?.let { msg ->

@@ -30,7 +30,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
@@ -61,7 +60,6 @@ import com.csiss.inventory.ui.report.ReportScreen
 import com.csiss.inventory.ui.stock.StockScreen
 import com.csiss.inventory.ui.supplier.SupplierScreen
 import com.csiss.inventory.ui.temperature.TemperatureScreen
-import com.csiss.inventory.ui.theme.CSISSTheme
 import com.csiss.inventory.ui.user.UserManagementScreen
 import kotlinx.coroutines.launch
 
@@ -748,22 +746,21 @@ private fun CompactManagementDrawer(
             HorizontalDivider(color = divider)
             Spacer(Modifier.height(12.dp))
 
-            OutlinedButton(
+            Button(
                 onClick = onLogoutClick,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(44.dp),
                 shape = RoundedCornerShape(10.dp),
-                border = BorderStroke(1.dp, border),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = Color.White,
-                    contentColor = dangerText
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = dangerText,
+                    contentColor = Color.White
                 )
             ) {
                 Text(
                     text = "Log out",
                     fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.SemiBold
                 )
             }
         }
@@ -824,67 +821,5 @@ private fun DrawerMenuItem(
                 modifier = Modifier.weight(1f)
             )
         }
-    }
-}
-
-@Composable
-private fun ComingSoonDrawerRow(
-    title: String,
-    imageVector: ImageVector
-) {
-    val upcomingMuted = Color(0xFF64748B)
-    val tagBg = Color(0xFFF1F5F9)
-    val tagText = Color(0xFF526075)
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Icon(
-            imageVector = imageVector,
-            contentDescription = null,
-            modifier = Modifier.size(20.dp),
-            tint = upcomingMuted
-        )
-        Text(
-            text = title,
-            modifier = Modifier.weight(1f),
-            color = upcomingMuted,
-            fontSize = 14.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Surface(
-            color = tagBg,
-            shape = RoundedCornerShape(6.dp)
-        ) {
-            Text(
-                text = "Coming soon",
-                color = tagText,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-            )
-        }
-    }
-}
-
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    CSISSTheme {
-        Greeting("Android")
     }
 }

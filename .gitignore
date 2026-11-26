@@ -15,12 +15,10 @@ captures/
 *.keystore
 key.properties
 
-# PHP backend secrets
+# Local environment secrets
 .env
 .env.*
 !.env.example
-secrets.php
-vendor/
 
 # ESP32 credentials
 secrets.h

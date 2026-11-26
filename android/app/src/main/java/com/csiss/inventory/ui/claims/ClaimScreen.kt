@@ -12,6 +12,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,6 +27,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.csiss.inventory.data.*
+import com.csiss.inventory.ui.components.CsissLightRefreshIndicator
 import kotlinx.coroutines.launch
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -130,6 +132,8 @@ fun ClaimScreen(modifier: Modifier = Modifier) {
     val displayClaims = if (filterStatus == "ALL") vm.claims
                         else vm.claims.filter { it.status == filterStatus }
 
+    val pullToRefreshState = rememberPullToRefreshState()
+
     Scaffold(
         containerColor = Background,
         snackbarHost   = { SnackbarHost(snackState) },
@@ -146,7 +150,15 @@ fun ClaimScreen(modifier: Modifier = Modifier) {
         PullToRefreshBox(
             isRefreshing = vm.isLoading,
             onRefresh    = { vm.load() },
-            modifier     = modifier.padding(padding)
+            modifier     = modifier.padding(padding),
+            state        = pullToRefreshState,
+            indicator    = {
+                CsissLightRefreshIndicator(
+                    state        = pullToRefreshState,
+                    isRefreshing = vm.isLoading,
+                    modifier     = Modifier.align(Alignment.TopCenter)
+                )
+            }
         ) {
             LazyColumn(
                 contentPadding      = PaddingValues(16.dp),

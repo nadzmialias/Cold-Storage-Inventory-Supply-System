@@ -19,7 +19,7 @@ private val Navy = Color(0xFF132945)
 private val Background = Color(0xFFF1F6FB)
 private val TextDark = Color(0xFF182B48)
 private val TextMuted = Color(0xFF718198)
-private val AlertRed = Color(0xFFE45465)
+private val AlertRed = Color(0xFFC81E32)
 
 @Composable
 fun ProfileScreen(
@@ -145,7 +145,7 @@ fun ProfileScreen(
         Spacer(modifier = Modifier.weight(1f))
 
         // Logout action
-        OutlinedButton(
+        Button(
             onClick = {
                 showLogoutDialog = true
             },
@@ -153,8 +153,9 @@ fun ProfileScreen(
                 .fillMaxWidth()
                 .height(48.dp),
             shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = AlertRed
+            colors = ButtonDefaults.buttonColors(
+                containerColor = AlertRed,
+                contentColor = Color.White
             )
         ) {
             Text(

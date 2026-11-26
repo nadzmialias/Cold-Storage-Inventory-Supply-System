@@ -9,6 +9,7 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -20,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.csiss.inventory.data.AlertRepository
 import com.csiss.inventory.data.SystemAlertRow
+import com.csiss.inventory.ui.components.CsissLightRefreshIndicator
 import com.csiss.inventory.ui.components.SummaryStat
 import com.csiss.inventory.ui.components.SummaryStatsCard
 import kotlinx.coroutines.CancellationException
@@ -97,6 +99,7 @@ fun NotificationScreen(
         3 -> alerts.filter { it.isResolved }
         else -> openAlerts
     }
+    val pullToRefreshState = rememberPullToRefreshState()
 
     MaterialTheme(
         colorScheme = lightColorScheme(
@@ -110,14 +113,21 @@ fun NotificationScreen(
             isRefreshing = busy,
             onRefresh = { runTask { reload() } },
             modifier = modifier.fillMaxSize(),
-            indicator = {}
+            state = pullToRefreshState,
+            indicator = {
+                CsissLightRefreshIndicator(
+                    state = pullToRefreshState,
+                    isRefreshing = busy,
+                    modifier = Modifier.align(Alignment.TopCenter)
+                )
+            }
         ) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Background),
                 contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // Header
                 item {
@@ -136,10 +146,6 @@ fun NotificationScreen(
                             fontWeight = FontWeight.SemiBold
                         )
                     }
-                }
-
-                if (busy) {
-                    item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
                 }
 
                 error?.let { msg ->

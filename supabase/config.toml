@@ -416,3 +416,9 @@ enabled = true
 
 [functions.ingest-temperature]
 verify_jwt = false
+
+[functions.get-temperature-limits]
+verify_jwt = false
+
+[functions.manage-users]
+verify_jwt = true
