@@ -25,6 +25,10 @@ data class CsissUser(
 
 class Authentication {
 
+    companion object {
+        const val AUTH_CALLBACK_URL = "com.csiss.inventory://auth/callback"
+    }
+
     private val client
         get() = SupabaseClientProvider.client
 
@@ -37,6 +41,14 @@ class Authentication {
             this.email = email.trim()
             this.password = password
         }
+    }
+
+    // FORGOT PASSWORD
+    suspend fun sendPasswordResetEmail(email: String) {
+        client.auth.resetPasswordForEmail(
+            email = email.trim().lowercase(),
+            redirectUrl = AUTH_CALLBACK_URL
+        )
     }
 
     // GET CURRENT USER PROFILE

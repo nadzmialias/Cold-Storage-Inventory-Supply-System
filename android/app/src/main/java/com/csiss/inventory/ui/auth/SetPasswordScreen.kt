@@ -1,6 +1,7 @@
 
 package com.csiss.inventory.ui.auth
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -10,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -28,12 +30,14 @@ private val Muted = Color(0xFF718198)
 @Composable
 fun SetPasswordScreen(
     invitedUserId: String,
+    isPasswordReset: Boolean = false,
     onFinished: () -> Unit,
     onCancel: () -> Unit
 ) {
     val auth = remember {
         SupabaseClientProvider.client.auth
     }
+    val context = LocalContext.current
 
     val scope = rememberCoroutineScope()
     val sessionStatus by auth.sessionStatus.collectAsState()
@@ -56,6 +60,7 @@ fun SetPasswordScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Background)
+            .safeDrawingPadding()
             .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 28.dp),
@@ -71,15 +76,18 @@ fun SetPasswordScreen(
         Spacer(Modifier.height(12.dp))
 
         Text(
-            text = "Set Your Password",
+            text = if (isPasswordReset) "Reset Your Password" else "Set Your Password",
             color = Navy,
             fontSize = 27.sp,
             fontWeight = FontWeight.Bold
         )
 
         Text(
-            text = "Your account invitation has been accepted. " +
-                    "Create a password to finish setting up your account.",
+            text = if (isPasswordReset) {
+                "Your reset link has been verified. Create a new password for your account."
+            } else {
+                "Your account invitation has been accepted. Create a password to finish setting up your account."
+            },
             color = Muted,
             fontSize = 14.sp,
             lineHeight = 21.sp
@@ -165,15 +173,24 @@ fun SetPasswordScreen(
                         }
 
 
-                        // Clear the invitation session.
+                        // Clear the temporary callback session before returning to sign in.
                         auth.signOut()
+
+                        Toast.makeText(
+                            context,
+                            if (isPasswordReset) {
+                                "Password updated. Sign in with your new password."
+                            } else {
+                                "Password saved. You can now sign in."
+                            },
+                            Toast.LENGTH_LONG
+                        ).show()
 
                         onFinished()
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        error = e.message
-                            ?: "Unable to save your password."
+                        error = friendlyPasswordError(e, isPasswordReset)
                     } finally {
                         saving = false
                     }
@@ -196,7 +213,7 @@ fun SetPasswordScreen(
                 )
             } else {
                 Text(
-                    "Save Password",
+                    text = if (isPasswordReset) "Update Password" else "Save Password",
                     fontWeight = FontWeight.SemiBold
                 )
             }
@@ -218,7 +235,9 @@ fun SetPasswordScreen(
         AlertDialog(
             onDismissRequest = { error = null },
             title = {
-                Text("Unable to set password")
+                Text(
+                    if (isPasswordReset) "Unable to reset password" else "Unable to set password"
+                )
             },
             text = {
                 Text(message)
@@ -231,6 +250,39 @@ fun SetPasswordScreen(
             containerColor = Color.White,
             shape = RoundedCornerShape(20.dp)
         )
+    }
+}
+
+private fun friendlyPasswordError(e: Exception, isPasswordReset: Boolean): String {
+    val raw = e.message.orEmpty()
+    return when {
+        raw.contains("same_password", ignoreCase = true) ||
+            raw.contains("different from the old password", ignoreCase = true) ->
+            "Your new password must be different from your current password."
+
+        raw.contains("weak_password", ignoreCase = true) ||
+            raw.contains("password should be at least", ignoreCase = true) ->
+            "Please choose a stronger password with at least 8 characters."
+
+        raw.contains("session", ignoreCase = true) ||
+            raw.contains("expired", ignoreCase = true) ||
+            raw.contains("unauthorized", ignoreCase = true) ->
+            if (isPasswordReset) {
+                "Your reset link session has expired. Please request a new reset link."
+            } else {
+                "Your invitation session has expired. Please request a new invitation."
+            }
+
+        raw.contains("rate", ignoreCase = true) ||
+            raw.contains("too many", ignoreCase = true) ->
+            "Too many attempts. Please wait a moment and try again."
+
+        else ->
+            if (isPasswordReset) {
+                "Unable to update your password. Check your connection and try again."
+            } else {
+                "Unable to save your password. Check your connection and try again."
+            }
     }
 }
 

@@ -40,6 +40,7 @@ class InvitationActivity : ComponentActivity() {
 
     private var invitedUserId by mutableStateOf<String?>(null)
     private var invitationError by mutableStateOf<String?>(null)
+    private var isRecoveryFlow by mutableStateOf(false)
 
     private var timeoutJob: Job? = null
     private var sessionJob: Job? = null
@@ -67,6 +68,7 @@ class InvitationActivity : ComponentActivity() {
                     invitedUserId != null -> {
                         SetPasswordScreen(
                             invitedUserId = invitedUserId!!,
+                            isPasswordReset = isRecoveryFlow,
                             onFinished = ::openLogin,
                             onCancel = ::leaveInvitation
                         )
@@ -75,6 +77,7 @@ class InvitationActivity : ComponentActivity() {
                     invitationError != null -> {
                         InvitationStatusScreen(
                             message = invitationError,
+                            isPasswordReset = isRecoveryFlow,
                             onBack = ::leaveInvitation
                         )
                     }
@@ -82,6 +85,7 @@ class InvitationActivity : ComponentActivity() {
                     else -> {
                         InvitationStatusScreen(
                             message = null,
+                            isPasswordReset = isRecoveryFlow,
                             onBack = ::leaveInvitation
                         )
                     }
@@ -102,6 +106,7 @@ class InvitationActivity : ComponentActivity() {
 
         invitedUserId = null
         invitationError = null
+        isRecoveryFlow = false
 
         val uri = incomingIntent.data
 
@@ -111,14 +116,28 @@ class InvitationActivity : ComponentActivity() {
             uri.host != "auth" ||
             uri.path != "/callback"
         ) {
-            invitationError = "Invalid invitation link."
+            invitationError = "Invalid authentication link."
             return
         }
 
-        // Supabase can return errors in the query or fragment.
+        // Supabase can return errors or tokens in the query or fragment.
         val fragment = uri.fragment?.let {
             Uri.parse("https://callback.invalid/?$it")
         }
+
+        val hasTokens =
+            !fragment?.getQueryParameter("access_token").isNullOrBlank() &&
+                    !fragment?.getQueryParameter("refresh_token").isNullOrBlank()
+
+        val hasCode =
+            !uri.getQueryParameter("code").isNullOrBlank()
+
+        // Admin invites arrive via implicit tokens with type=invite; client reset requests use PKCE (?code=) or type=recovery.
+        val linkType = uri.getQueryParameter("type")
+            ?: fragment?.getQueryParameter("type")
+        isRecoveryFlow = linkType == "recovery" || (hasCode && linkType != "invite")
+
+        val linkKind = if (isRecoveryFlow) "reset link" else "invitation"
 
         val linkError =
             uri.getQueryParameter("error_description")
@@ -129,17 +148,10 @@ class InvitationActivity : ComponentActivity() {
             return
         }
 
-        val hasTokens =
-            !fragment?.getQueryParameter("access_token").isNullOrBlank() &&
-                    !fragment?.getQueryParameter("refresh_token").isNullOrBlank()
-
-        val hasCode =
-            !uri.getQueryParameter("code").isNullOrBlank()
-
         if (!hasTokens && !hasCode) {
             invitationError =
-                "The invitation link is missing authentication details. " +
-                        "Please request a new invitation."
+                "The $linkKind is missing authentication details. " +
+                        "Please request a new $linkKind."
             return
         }
 
@@ -149,9 +161,9 @@ class InvitationActivity : ComponentActivity() {
 
             if (invitedUserId == null && invitationError == null) {
                 invitationError =
-                    "We couldn't verify this invitation. " +
+                    "We couldn't verify this $linkKind. " +
                             "It may have expired or already been used. " +
-                            "Please request a new invitation."
+                            "Please request a new $linkKind."
             }
         }
 
@@ -165,10 +177,10 @@ class InvitationActivity : ComponentActivity() {
 
                     if (userId.isNullOrBlank()) {
                         invitationError =
-                            "Unable to identify the invited account."
+                            "Unable to identify your account."
                     } else {
-                        // Wait for the invited account's session,
-                        // not a previously signed-in Admin session.
+                        // Wait for the target account's session,
+                        // not a previously signed-in session.
                         sessionJob = lifecycleScope.launch {
                             val authenticated = withTimeoutOrNull(12_000L) {
                                 client.auth.sessionStatus.first { status ->
@@ -182,8 +194,8 @@ class InvitationActivity : ComponentActivity() {
                                 invitedUserId = userId
                             } else {
                                 invitationError =
-                                    "The invitation session could not be established. " +
-                                            "Please request a new invitation."
+                                    "The verification session could not be established. " +
+                                            "Please request a new $linkKind."
                             }
                         }
                     }
@@ -192,8 +204,8 @@ class InvitationActivity : ComponentActivity() {
         } catch (e: Exception) {
             timeoutJob?.cancel()
             invitationError =
-                "Unable to verify your invitation. " +
-                        "Please try a new invitation link."
+                "Unable to verify your $linkKind. " +
+                        "Please request a new $linkKind."
         }
     }
 
@@ -229,6 +241,7 @@ class InvitationActivity : ComponentActivity() {
 @Composable
 private fun InvitationStatusScreen(
     message: String?,
+    isPasswordReset: Boolean,
     onBack: () -> Unit
 ) {
     val navy = Color(0xFF132945)
@@ -260,10 +273,11 @@ private fun InvitationStatusScreen(
             }
 
             Text(
-                text = if (loading) {
-                    "Verifying your invitation..."
-                } else {
-                    "Unable to Verify Invitation"
+                text = when {
+                    loading && isPasswordReset -> "Verifying your reset link..."
+                    loading -> "Verifying your invitation..."
+                    isPasswordReset -> "Unable to Verify Reset Link"
+                    else -> "Unable to Verify Invitation"
                 },
                 color = navy,
                 fontSize = 22.sp,
